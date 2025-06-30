@@ -26,6 +26,7 @@ $query_karpet = mysqli_query($konek, "
         dp.kuantitas,
         dp.harga_saat_pesan as harga,
         dp.subtotal_item as subtotal,
+        p.total_setelah_diskon,
         pg.nama_lengkap as penerima
     FROM pesanan p
     JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
@@ -103,12 +104,24 @@ if (!$query_karpet) {
         <?php
         $total_karpet = 0;
         $total_nilai = 0;
+        $total_promo = 0;
+        $total_nonpromo = 0;
         $temp_data = array();
 
         if ($query_karpet) {
             while($data = mysqli_fetch_array($query_karpet)) {
+                $is_promo = ($data['total_setelah_diskon'] !== null && $data['total_setelah_diskon'] > 0);
+                $nilai = $is_promo ? $data['total_setelah_diskon'] : $data['subtotal'];
                 $total_karpet += $data['kuantitas'];
-                $total_nilai += $data['subtotal'];
+                $total_nilai += $nilai;
+                if ($is_promo) {
+                    $total_promo += $nilai;
+                } else {
+                    $total_nonpromo += $nilai;
+                }
+                // Simpan nilai yang sudah dipilih ke array
+                $data['nilai_final'] = $nilai;
+                $data['is_promo'] = $is_promo;
                 $temp_data[] = $data;
             }
         }
@@ -151,7 +164,7 @@ if (!$query_karpet) {
                 echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['kuantitas']) . "</td>";
                 echo "<td>Rp " . number_format($data['harga'], 0, ',', '.') . "</td>";
-                echo "<td>Rp " . number_format($data['subtotal'], 0, ',', '.') . "</td>";
+                echo "<td>Rp " . number_format($data['nilai_final'], 0, ',', '.') . "</td>";
                 echo "<td>" . htmlspecialchars($data['status_pesanan_umum']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['penerima']) . "</td>";
                 echo "</tr>";
@@ -160,6 +173,16 @@ if (!$query_karpet) {
             <tr>
                 <td colspan="7" align="center"><strong>Total</strong></td>
                 <td><strong>Rp <?= number_format($total_nilai, 0, ',', '.') ?></strong></td>
+                <td colspan="2"></td>
+            </tr>
+            <tr>
+                <td colspan="7" align="right"><strong>Total Promo</strong></td>
+                <td colspan="2"><strong style="color:green;">Rp <?= number_format($total_promo, 0, ',', '.') ?></strong></td>
+                <td colspan="2"></td>
+            </tr>
+            <tr>
+                <td colspan="7" align="right"><strong>Total Non-Promo</strong></td>
+                <td colspan="2"><strong style="color:blue;">Rp <?= number_format($total_nonpromo, 0, ',', '.') ?></strong></td>
                 <td colspan="2"></td>
             </tr>
         </tbody>

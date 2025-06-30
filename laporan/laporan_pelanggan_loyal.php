@@ -119,7 +119,7 @@ $tmp_query = mysqli_query($konek, "
     WHERE p.tanggal_masuk BETWEEN '$tgl_awal' AND '$tgl_akhir'
     GROUP BY pl.id_pelanggan
     HAVING COUNT(p.id_pesanan) >= $min_pesanan 
-        AND SUM(p.total_harga_keseluruhan) >= $total_nilai_minimal
+        AND SUM(IF(p.total_setelah_diskon IS NOT NULL AND p.total_setelah_diskon > 0, p.total_setelah_diskon, p.total_harga_keseluruhan)) >= $total_nilai_minimal
     ORDER BY jumlah_pesanan DESC, total_nilai_pesanan DESC
 ");
 while($row = mysqli_fetch_assoc($tmp_query)) {
@@ -200,7 +200,7 @@ while($row = mysqli_fetch_assoc($tmp_query)) {
     WHERE p.tanggal_masuk BETWEEN '$tgl_awal' AND '$tgl_akhir'
     GROUP BY pl.id_pelanggan
     HAVING COUNT(p.id_pesanan) >= $min_pesanan 
-        AND SUM(p.total_harga_keseluruhan) >= $total_nilai_minimal
+        AND SUM(IF(p.total_setelah_diskon IS NOT NULL AND p.total_setelah_diskon > 0, p.total_setelah_diskon, p.total_harga_keseluruhan)) >= $total_nilai_minimal
     ORDER BY jumlah_pesanan DESC, total_nilai_pesanan DESC
 ");
                         $no = 1;

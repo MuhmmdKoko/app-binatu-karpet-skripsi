@@ -12,6 +12,7 @@ $tgl_akhir = mysqli_real_escape_string($konek, $_POST['tgl_akhir']);
 $query_karpet = mysqli_query($konek, "
     SELECT 
         p.*,
+        p.total_setelah_diskon,
         pl.nama_pelanggan,
         pl.nomor_telepon,
         pl.alamat,
@@ -67,26 +68,43 @@ if (!$data) {
             $no = 1;
             $total_karpet = 0;
             $total_nilai = 0;
+            $total_promo = 0;
+            $total_nonpromo = 0;
 
             // Reset pointer
             mysqli_data_seek($query_karpet, 0);
             
             while($data = mysqli_fetch_array($query_karpet)) {
+                $is_promo = ($data['total_setelah_diskon'] !== null && $data['total_setelah_diskon'] > 0);
+                $nilai = $is_promo ? $data['total_setelah_diskon'] : $data['subtotal'];
                 echo "<tr>";
                 echo "<td>" . $no++ . "</td>";
                 echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['kuantitas']) . "</td>";
                 echo "<td>Rp " . number_format($data['harga'], 0, ',', '.') . "</td>";
-                echo "<td>Rp " . number_format($data['subtotal'], 0, ',', '.') . "</td>";
+                echo "<td>Rp " . number_format($nilai, 0, ',', '.') . "</td>";
                 echo "</tr>";
 
                 $total_karpet += $data['kuantitas'];
-                $total_nilai += $data['subtotal'];
+                $total_nilai += $nilai;
+                if ($is_promo) {
+                    $total_promo += $nilai;
+                } else {
+                    $total_nonpromo += $nilai;
+                }
             }
             ?>
             <tr>
                 <td colspan="4" align="center"><strong>Total</strong></td>
                 <td><strong>Rp <?= number_format($total_nilai, 0, ',', '.') ?></strong></td>
+            </tr>
+            <tr>
+                <td colspan="4" align="right"><strong>Total Promo</strong></td>
+                <td><strong style="color:green;">Rp <?= number_format($total_promo, 0, ',', '.') ?></strong></td>
+            </tr>
+            <tr>
+                <td colspan="4" align="right"><strong>Total Non-Promo</strong></td>
+                <td><strong style="color:blue;">Rp <?= number_format($total_nonpromo, 0, ',', '.') ?></strong></td>
             </tr>
         </tbody>
     </table>
