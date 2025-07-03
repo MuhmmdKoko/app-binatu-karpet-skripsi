@@ -18,6 +18,8 @@ $query_karpet = mysqli_query($konek, "
         pl.alamat,
         l.nama_layanan,
         dp.kuantitas,
+        dp.panjang_karpet,
+        dp.lebar_karpet,
         dp.harga_saat_pesan as harga,
         dp.subtotal_item as subtotal,
         pg.nama_lengkap as penerima
@@ -36,6 +38,28 @@ if (!$query_karpet) {
     exit;
 }
 
+// Hitung statistik sebelum HTML
+$total_karpet = 0;
+$total_nilai = 0;
+$total_promo = 0;
+$total_nonpromo = 0;
+$total_layanan = 0;
+
+mysqli_data_seek($query_karpet, 0);
+while($row = mysqli_fetch_array($query_karpet)) {
+    $is_promo = (isset($row['total_setelah_diskon']) && $row['total_setelah_diskon'] !== null && $row['total_setelah_diskon'] > 0);
+    $nilai = $is_promo ? $row['total_setelah_diskon'] : $row['subtotal'];
+    $total_karpet += $row['kuantitas'];
+    $total_nilai += $nilai;
+    if ($is_promo) {
+        $total_promo += $nilai;
+    } else {
+        $total_nonpromo += $nilai;
+    }
+    $total_layanan++;
+}
+// Reset pointer untuk digunakan di tabel
+mysqli_data_seek($query_karpet, 0);
 $data = mysqli_fetch_array($query_karpet);
 if (!$data) {
     echo "<div class='alert alert-warning'>No data found for this order.</div>";
@@ -55,58 +79,32 @@ if (!$data) {
 <div class="table-responsive">
     <table class="table table-bordered table-hover">
         <thead>
-            <tr>
-                <th>No</th>
-                <th>Layanan</th>
-                <th>Jumlah</th>
-                <th>Harga</th>
-                <th>Subtotal</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-            $no = 1;
-            $total_karpet = 0;
-            $total_nilai = 0;
-            $total_promo = 0;
-            $total_nonpromo = 0;
-
-            // Reset pointer
-            mysqli_data_seek($query_karpet, 0);
-            
-            while($data = mysqli_fetch_array($query_karpet)) {
-                $is_promo = ($data['total_setelah_diskon'] !== null && $data['total_setelah_diskon'] > 0);
-                $nilai = $is_promo ? $data['total_setelah_diskon'] : $data['subtotal'];
-                echo "<tr>";
-                echo "<td>" . $no++ . "</td>";
-                echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
-                echo "<td>" . htmlspecialchars($data['kuantitas']) . "</td>";
-                echo "<td>Rp " . number_format($data['harga'], 0, ',', '.') . "</td>";
-                echo "<td>Rp " . number_format($nilai, 0, ',', '.') . "</td>";
-                echo "</tr>";
-
-                $total_karpet += $data['kuantitas'];
-                $total_nilai += $nilai;
-                if ($is_promo) {
-                    $total_promo += $nilai;
-                } else {
-                    $total_nonpromo += $nilai;
-                }
-            }
-            ?>
-            <tr>
-                <td colspan="4" align="center"><strong>Total</strong></td>
-                <td><strong>Rp <?= number_format($total_nilai, 0, ',', '.') ?></strong></td>
-            </tr>
-            <tr>
-                <td colspan="4" align="right"><strong>Total Promo</strong></td>
-                <td><strong style="color:green;">Rp <?= number_format($total_promo, 0, ',', '.') ?></strong></td>
-            </tr>
-            <tr>
-                <td colspan="4" align="right"><strong>Total Non-Promo</strong></td>
-                <td><strong style="color:blue;">Rp <?= number_format($total_nonpromo, 0, ',', '.') ?></strong></td>
-            </tr>
-        </tbody>
+    <tr>
+        <th>No</th>
+        <th>Layanan</th>
+        <th>Ukuran (m)</th>
+        <th>Jumlah</th>
+    </tr>
+</thead>
+<tbody>
+<?php
+$no = 1;
+mysqli_data_seek($query_karpet, 0);
+while($data = mysqli_fetch_array($query_karpet)) {
+    echo "<tr>";
+    echo "<td>" . $no++ . "</td>";
+    echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
+    if (isset($data['panjang_karpet']) && isset($data['lebar_karpet']) && $data['panjang_karpet'] && $data['lebar_karpet']) {
+    $ukuran = number_format($data['panjang_karpet'], 2, ',', '.') . ' x ' . number_format($data['lebar_karpet'], 2, ',', '.') . ' m';
+} else {
+    $ukuran = '-';
+}
+echo "<td>" . $ukuran . "</td>";
+    echo "<td>" . htmlspecialchars($data['kuantitas']) . "</td>";
+    echo "</tr>";
+}
+?>
+</tbody>
     </table>
 </div>
 
@@ -115,15 +113,15 @@ if (!$data) {
         <div class="card bg-primary text-white">
             <div class="card-body">
                 <h6 class="card-title">Total Karpet</h6>
-                <h4><?= number_format($total_karpet) ?></h4>
+                <h4><?= number_format($total_karpet, 2, ',', '.') ?></h4>
             </div>
         </div>
     </div>
     <div class="col-md-6">
-        <div class="card bg-success text-white">
+        <div class="card bg-info text-white">
             <div class="card-body">
-                <h6 class="card-title">Total Nilai Layanan</h6>
-                <h4>Rp <?= number_format($total_nilai, 0, ',', '.') ?></h4>
+                <h6 class="card-title">Total Layanan</h6>
+                <h4><?= number_format($total_layanan) ?></h4>
             </div>
         </div>
     </div>

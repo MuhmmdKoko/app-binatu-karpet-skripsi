@@ -149,147 +149,175 @@ $(document).ready(function() {
     $('#layanan_karpet').on('change', function() {
         $(this).closest('form').submit();
     });
+    // Update URL Print setiap kali filter berubah
+    function updatePrintUrl() {
+        var tgl_awal = $('#tgl_awal').val();
+        var tgl_akhir = $('#tgl_akhir').val();
+        var layanan_id = $('#layanan_karpet').val();
+        var layanan_nama = $('#layanan_karpet option:selected').text();
+        var baseUrl = 'laporan/print_layanan_karpet.php?tgl_awal=' + encodeURIComponent(tgl_awal) + '&tgl_akhir=' + encodeURIComponent(tgl_akhir);
+        if (layanan_id) {
+            if (layanan_nama !== '-- Semua Layanan Karpet --') {
+                baseUrl += '&layanan=' + encodeURIComponent(layanan_nama.trim());
+            }
+        }
+        $('.btn-print-karpet').attr('href', baseUrl);
+    }
+    $('#layanan_karpet, #tgl_awal, #tgl_akhir').on('change', updatePrintUrl);
+    updatePrintUrl(); // Panggil sekali saat load
 });
 </script>
             </form>
         </div>
     </div>
     
-    <!-- Statistik Ringkas -->
     <?php
-    // Inisialisasi nilai default jika belum dihitung
-    if (!isset($total_karpet)) $total_karpet = 0;
-    if (!isset($total_nilai)) $total_nilai = 0;
-    if (!isset($total_promo)) $total_promo = 0;
-    if (!isset($total_nonpromo)) $total_nonpromo = 0;
-    ?>
-    <div class="row mb-3">
-        <div class="col-md-3 col-6">
-            <div class="card text-center shadow-sm">
-                <div class="card-body">
-                    <span class="badge bg-primary mb-2"><i class="ti ti-stack"></i> Total Karpet</span>
-                    <h3 class="mb-0"><?= number_format($total_karpet) ?></h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6">
-            <div class="card text-center shadow-sm">
-                <div class="card-body">
-                    <span class="badge bg-success mb-2"><i class="ti ti-cash"></i> Total Nilai Layanan</span>
-                    <h3 class="mb-0">Rp <?= number_format($total_nilai, 0, ',', '.') ?></h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mt-3 mt-md-0">
-            <div class="card text-center shadow-sm">
-                <div class="card-body">
-                    <span class="badge bg-info text-dark mb-2"><i class="ti ti-discount-2"></i> Total Promo</span>
-                    <h3 class="mb-0">Rp <?= number_format($total_promo, 0, ',', '.') ?></h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6 mt-3 mt-md-0">
-            <div class="card text-center shadow-sm">
-                <div class="card-body">
-                    <span class="badge bg-secondary mb-2"><i class="ti ti-receipt"></i> Total Non-Promo</span>
-                    <h3 class="mb-0">Rp <?= number_format($total_nonpromo, 0, ',', '.') ?></h3>
-                </div>
+// Query dan perhitungan total karpet & total layanan
+$where_layanan = '';
+if (!empty($layanan_karpet_selected)) {
+    $where_layanan = "dp.id_layanan = '" . mysqli_real_escape_string($konek, $layanan_karpet_selected) . "'";
+} else {
+    $where_layanan = '1=1';
+}
+$sql = "SELECT dp.kuantitas
+        FROM pesanan p
+        JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
+        JOIN layanan l ON dp.id_layanan = l.id_layanan
+        JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
+        LEFT JOIN pengguna pg ON p.id_pengguna_penerima = pg.id_pengguna
+        WHERE $where_layanan
+        AND DATE(p.tanggal_masuk) BETWEEN '$tgl_awal' AND '$tgl_akhir'";
+$query_stat = mysqli_query($konek, $sql);
+$total_karpet = 0;
+$total_layanan = 0;
+if ($query_stat) {
+    $total_layanan = mysqli_num_rows($query_stat);
+    while ($row = mysqli_fetch_assoc($query_stat)) {
+        $total_karpet += $row['kuantitas'];
+    }
+}
+?>
+<div class="row mb-3">
+    <div class="col-md-6 col-6 mb-2">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <span class="badge bg-primary mb-2"><i class="ti ti-stack"></i> Total Kuantitas</span>
+                <h3 class="mb-0"><?= number_format($total_karpet, 2, ',', '.') ?></h3>
             </div>
         </div>
     </div>
-    <!-- END Statistik Ringkas -->
-
+    <div class="col-md-6 col-6 mb-2">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <span class="badge bg-success mb-2"><i class="ti ti-table"></i> Total Layanan</span>
+                <h3 class="mb-0"><?= number_format($total_layanan) ?></h3>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Statistik Ringkas -->
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0"><i class="ti ti-table"></i> Data Layanan Karpet</h5>
             <div>
                 <a href="laporan/export_layanan_karpet.php?tgl_awal=<?= $tgl_awal ?>&tgl_akhir=<?= $tgl_akhir ?>" class="btn btn-success btn-sm me-2" target="_blank" data-bs-toggle="tooltip" title="Export ke Excel"><i class="ti ti-file-export"></i> Excel</a>
-                <a href="laporan/print_layanan_karpet.php?tgl_awal=<?= $tgl_awal ?>&tgl_akhir=<?= $tgl_akhir ?>" class="btn btn-primary btn-sm" target="_blank" data-bs-toggle="tooltip" title="Print laporan"><i class="ti ti-printer"></i> Print</a>
+                <a href="#" class="btn btn-primary btn-sm btn-print-karpet" target="_blank" data-bs-toggle="tooltip" title="Print laporan"><i class="ti ti-printer"></i> Print</a>
             </div>
         </div>
         <div class="card-body">
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php
-                        // Filter layanan karpet
-                        $layanan_karpet_selected = isset($_POST['layanan_karpet']) ? $_POST['layanan_karpet'] : '';
-                        $where_layanan = '';
-                        if ($layanan_karpet_selected) {
-                            $where_layanan = "l.id_layanan = '" . mysqli_real_escape_string($konek, $layanan_karpet_selected) . "'";
-                        } else {
-                            $where_layanan = "l.nama_layanan LIKE '%Karpet%'";
+            <table id="layananKarpetTable" class="table table-bordered table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Invoice</th>
+                        <th>Tgl Masuk</th>
+                        <th>Tgl Selesai</th>
+                        <th>Tgl Diambil</th>
+                        <th>Pelanggan</th>
+                        <th>Layanan</th>
+                        <th>Ukuran (m)</th>
+                        <th>Kuantitas</th>
+                        <th>Detail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    // Filter layanan karpet
+                    $layanan_karpet_selected = isset($_POST['layanan_karpet']) ? $_POST['layanan_karpet'] : '';
+                    $layanan_karpet_selected_nama = '';
+                    if ($layanan_karpet_selected) {
+                        // Ambil nama layanan dari DB berdasarkan ID
+                        $qNama = mysqli_query($konek, "SELECT nama_layanan FROM layanan WHERE id_layanan = '" . mysqli_real_escape_string($konek, $layanan_karpet_selected) . "' LIMIT 1");
+                        if ($rowNama = mysqli_fetch_assoc($qNama)) {
+                            $layanan_karpet_selected_nama = $rowNama['nama_layanan'];
                         }
-                        $sql = "
-                            SELECT 
-                                p.*,
-                                pl.nama_pelanggan,
-                                pl.nomor_telepon,
-                                pl.alamat,
-                                l.nama_layanan,
-                                dp.kuantitas,
-                                dp.harga_saat_pesan as harga,
-                                dp.panjang_karpet,
-                                dp.lebar_karpet
-                                dp.subtotal_item as subtotal,
-                                pg.nama_lengkap as penerima
-                            FROM pesanan p
-                            JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
-                            JOIN layanan l ON dp.id_layanan = l.id_layanan
-                            JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
-                            LEFT JOIN pengguna pg ON p.id_pengguna_penerima = pg.id_pengguna
-                            WHERE $where_layanan
-                            AND DATE(p.tanggal_masuk) BETWEEN '$tgl_awal' AND '$tgl_akhir'
-                            ORDER BY p.tanggal_masuk DESC
-                        ";
-                        $query = mysqli_query($konek, $sql);
-                        if (!$query) {
-                            echo "<tr><td colspan='11'>Error executing query: " . mysqli_error($konek) . "</td></tr>";
-                        } else {
-                            $no = 1;
-                            $total_karpet = 0;
-                            $total_nilai = 0;
-                            $total_promo = 0;
-                            $total_nonpromo = 0;
-                            while($data = mysqli_fetch_array($query)) {
-    echo "<tr>";
-    echo "<td>" . $no++ . "</td>";
-    echo "<td>" . htmlspecialchars($data['nomor_invoice']) . "</td>";
-    echo "<td>" . date('d/m/Y H:i', strtotime($data['tanggal_masuk'])) . "</td>";
-    echo "<td>" . ($data['tanggal_selesai_aktual'] ? date('d/m/Y H:i', strtotime($data['tanggal_selesai_aktual'])) : '-') . "</td>";
-    echo "<td>" . ($data['tanggal_diambil'] ? date('d/m/Y H:i', strtotime($data['tanggal_diambil'])) : '-') . "</td>";
-    echo "<td>" . htmlspecialchars($data['nama_pelanggan']) . "</td>";
-    echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
-    echo "<td>" . (isset($data['panjang_karpet']) && isset($data['lebar_karpet']) ? htmlspecialchars($data['panjang_karpet']) . " x " . htmlspecialchars($data['lebar_karpet']) . " m" : '-') . "</td>";
-    echo "<td>" . number_format($data['kuantitas']) . "</td>";
-    echo "</tr>";
-    $total_karpet += $data['kuantitas'];
-    // Nilai promo/nonpromo tetap dihitung jika diperlukan di statistik atas
-}
-                        }
+                        $where_layanan = "l.id_layanan = '" . mysqli_real_escape_string($konek, $layanan_karpet_selected) . "'";
+                    } else {
+                        $where_layanan = "l.nama_layanan LIKE '%Karpet%'";
+                    }
+                    $sql = "
+                        SELECT 
+                            p.*,
+                            pl.nama_pelanggan,
+                            pl.nomor_telepon,
+                            pl.alamat,
+                            l.nama_layanan,
+                            dp.kuantitas,
+                            dp.harga_saat_pesan as harga,
+                            dp.panjang_karpet,
+                            dp.lebar_karpet,
+                            dp.subtotal_item as subtotal,
+                            pg.nama_lengkap as penerima
+                        FROM pesanan p
+                        JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
+                        JOIN layanan l ON dp.id_layanan = l.id_layanan
+                        JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
+                        LEFT JOIN pengguna pg ON p.id_pengguna_penerima = pg.id_pengguna
+                        WHERE $where_layanan
+                        AND DATE(p.tanggal_masuk) BETWEEN '$tgl_awal' AND '$tgl_akhir'
+                    ";
+                    $query = mysqli_query($konek, $sql);
+                    if (!$query) {
+                        echo "<div class='alert alert-danger'>Error executing query: " . mysqli_error($konek) . "</div>";
+                        exit;
+                    }
+                    $no = 1;
+                    $total_karpet = 0;
+                    while ($data = mysqli_fetch_array($query)) {
+                        echo "<tr>";
+                        echo "<td>" . $no++ . "</td>";
+                        echo "<td>" . htmlspecialchars($data['nomor_invoice']) . "</td>";
+                        echo "<td>" . date('d/m/Y H:i', strtotime($data['tanggal_masuk'])) . "</td>";
+                        echo "<td>" . (isset($data['tanggal_selesai']) && !empty($data['tanggal_selesai']) ? date('d/m/Y H:i', strtotime($data['tanggal_selesai'])) : '-') . "</td>";
+                        echo "<td>" . (isset($data['tanggal_diambil']) && !empty($data['tanggal_diambil']) ? date('d/m/Y H:i', strtotime($data['tanggal_diambil'])) : '-') . "</td>";
+                        echo "<td>" . htmlspecialchars($data['nama_pelanggan']) . "</td>";
+                        echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
+                        echo "<td>" . (isset($data['panjang_karpet']) && isset($data['lebar_karpet']) ? htmlspecialchars($data['panjang_karpet']) . " x " . htmlspecialchars($data['lebar_karpet']) . " m" : '-') . "</td>";
+                        echo "<td>" . number_format($data['kuantitas'], 2, ',', '.') . "</td>";
+                        echo "<td><button class='btn btn-sm btn-primary btn-detail' data-id='" . $data['id_pesanan'] . "'>Detail</button></td>";
+                        echo "</tr>";
+                        $total_karpet += $data['kuantitas'];
+                            // Nilai promo/nonpromo tetap dihitung jika diperlukan di statistik atas
+                        } 
                         ?>
                     </tbody>
                     <tfoot>
-                            <tr>
-                                <td colspan="7" align="center"><strong>Total</strong></td>
-                                <td><strong>Rp <?= number_format($total_nilai, 0, ',', '.') ?></strong></td>
-                                <td colspan="3"></td>
-                            </tr>
-                            <tr>
-                                <td colspan="7" align="right"><strong>Total Promo</strong></td>
-                                <td><strong class="text-success">Rp <?= number_format(isset($total_promo) ? $total_promo : 0, 0, ',', '.') ?></strong></td>
-                                <td colspan="3"></td>
-                            </tr>
-                            <tr>
-                                <td colspan="7" align="right"><strong>Total Non-Promo</strong></td>
-                                <td><strong class="text-primary">Rp <?= number_format(isset($total_nonpromo) ? $total_nonpromo : 0, 0, ',', '.') ?></strong></td>
-                                <td colspan="3"></td>
-                            </tr>
-                        </tfoot>
+                        <tr>
+                            <td colspan="8" align="right"><strong>Total Kuantitas</strong></td>
+                            <td colspan="2"><strong><?= number_format($total_karpet, 2, ',', '.') ?></strong></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
     </div>
+    <?php
+    // Hitung total layanan (jumlah baris data)
+    $total_layanan = 0;
+    if (isset($query) && $query) {
+        $total_layanan = mysqli_num_rows($query);
+    }
+    ?>
     <!-- Modal Detail -->
     <div class="modal fade" id="detailModal" tabindex="-1">
         <div class="modal-dialog modal-lg">

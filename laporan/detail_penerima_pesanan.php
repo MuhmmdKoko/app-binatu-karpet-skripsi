@@ -1,30 +1,59 @@
 <?php
 include "../pengaturan/koneksi.php";
 
-$nama_penerima = $_POST['nama_penerima'];
-$tgl_awal = $_POST['tgl_awal'];
-$tgl_akhir = $_POST['tgl_akhir'];
+$id_pengguna = isset($_POST['id_pengguna']) && ctype_digit($_POST['id_pengguna']) ? $_POST['id_pengguna'] : '';
+$tgl_awal = isset($_POST['tgl_awal']) ? $_POST['tgl_awal'] : '';
+$tgl_akhir = isset($_POST['tgl_akhir']) ? $_POST['tgl_akhir'] : '';
 
-// Query untuk data pesanan
+// Query untuk data pesanan (sinkron dengan laporan utama)
+$where = "WHERE 1=1";
+if (!empty($id_pengguna)) {
+    $id_pengguna_esc = mysqli_real_escape_string($konek, $id_pengguna);
+    $where .= " AND p.id_pengguna_penerima = '$id_pengguna_esc'";
+}
+if (!empty($tgl_awal) && !empty($tgl_akhir)) {
+    $tgl_awal_esc = mysqli_real_escape_string($konek, $tgl_awal);
+    $tgl_akhir_esc = mysqli_real_escape_string($konek, $tgl_akhir);
+    $where .= " AND DATE(p.tanggal_masuk) BETWEEN '$tgl_awal_esc' AND '$tgl_akhir_esc'";
+}
 $query = mysqli_query($konek, "
     SELECT 
         p.*,
         pl.nama_pelanggan,
         GROUP_CONCAT(l.nama_layanan SEPARATOR ', ') as layanan,
-        MAX(dp.status_item_terkini) as status_item_terkini
+        MAX(dp.status_item_terkini) as status_item_terkini,
+        pg.nama_lengkap
     FROM pesanan p
+    LEFT JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
+    LEFT JOIN layanan l ON dp.id_layanan = l.id_layanan
     JOIN pelanggan pl ON p.id_pelanggan = pl.id_pelanggan
-    JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
-    JOIN layanan l ON dp.id_layanan = l.id_layanan
     JOIN pengguna pg ON p.id_pengguna_penerima = pg.id_pengguna
-    WHERE pg.nama_lengkap = '$nama_penerima'
-    AND DATE(p.tanggal_masuk) BETWEEN '$tgl_awal' AND '$tgl_akhir'
+    $where
     GROUP BY p.id_pesanan
     ORDER BY p.tanggal_masuk DESC
 ");
 ?>
 
-<h6>Detail Pesanan - <?= htmlspecialchars($nama_penerima) ?></h6>
+<?php
+// DEBUGGING OUTPUT
+// Remove or comment out after debugging
+// echo '<pre>ID Pengguna: ' . htmlspecialchars($id_pengguna) . "\nWHERE: $where\nRows: " . ($query ? mysqli_num_rows($query) : 'ERR') . '</pre>';
+// $nama_penerima_show = '';
+if ($query && mysqli_num_rows($query) > 0) {
+    $row_first = mysqli_fetch_assoc($query);
+    $nama_penerima_show = $row_first['nama_lengkap'];
+    mysqli_data_seek($query, 0);
+} else if (!empty($id_pengguna)) {
+    // Fetch the name directly if there are no orders but the user exists
+    $res_pengguna = mysqli_query($konek, "SELECT nama_lengkap FROM pengguna WHERE id_pengguna = '" . mysqli_real_escape_string($konek, $id_pengguna) . "'");
+    if ($res_pengguna && ($row_pengguna = mysqli_fetch_assoc($res_pengguna))) {
+        $nama_penerima_show = $row_pengguna['nama_lengkap'];
+    } else {
+        $nama_penerima_show = '-';
+    }
+}
+?>
+<h6>Detail Penerima - <?= htmlspecialchars($nama_penerima_show) ?></h6>
 <p>Periode: <?= date('d/m/Y', strtotime($tgl_awal)) ?> - <?= date('d/m/Y', strtotime($tgl_akhir)) ?></p>
 
 <div class="table-responsive">
