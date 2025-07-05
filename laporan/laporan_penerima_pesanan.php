@@ -166,6 +166,7 @@ if ($_SESSION['role'] != "Admin") {
                 });
                 </script>
 <script>
+    
 // Fungsi JS untuk detail modal penerima pesanan
 function showDetail(id_pengguna) {
     var tgl_awal = $('#tgl_awal').val();
@@ -187,53 +188,9 @@ function showDetail(id_pengguna) {
 </script>
             </form>
         </div>
-    </div>
-
-            
-
-            
-
-            <div class="d-flex justify-content-end mb-2">
-    <a href="#" class="btn btn-success btn-export-penerima me-2" target="_blank">
-        <i class="ti ti-file-export"></i> Export Excel
-    </a>
-    <a href="#" id="btnPrintPenerima" class="btn btn-primary btn-print-penerima" target="_blank">
-    <i class="ti ti-printer"></i> Print
-</a>
-<script>
-$('#btnPrintPenerima').on('click', function(e) {
-    e.preventDefault();
-    var tgl_awal = $('#tgl_awal').val();
-    var tgl_akhir = $('#tgl_akhir').val();
-    var id_pengguna = $('#id_pengguna').val();
-    var filter_periode = $('#filter_periode').val();
-    var url = 'laporan/print_penerima_pesanan.php?tgl_awal=' + encodeURIComponent(tgl_awal)
-        + '&tgl_akhir=' + encodeURIComponent(tgl_akhir)
-        + '&id_pengguna=' + encodeURIComponent(id_pengguna)
-        + '&filter_periode=' + encodeURIComponent(filter_periode);
-    window.open(url, '_blank');
-});
-</script>
-</div>
-<div class="table-responsive">
-    <table id="penerimaPesananTable" class="table table-bordered table-hover">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>Nama Penerima</th>
-                            <th>Jumlah Pesanan</th>
-                            <th>Total Nilai Pesanan</th>
-                            <th>Rata-rata Nilai Pesanan</th>
-                            <th>Detail</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td colspan="6" class="text-center">Tidak ada data</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Statistik Ringkas -->
+    </div>     
+    
+    <!-- Statistik Ringkas -->
     <div class="row mb-3">
         <div class="col-md-3 col-6 mb-2">
             <div class="card text-center shadow-sm">
@@ -270,12 +227,106 @@ $('#btnPrintPenerima').on('click', function(e) {
     </div>
     <!-- END Statistik Ringkas -->
 
-            <!-- Modal Detail -->
-            <div class="modal fade" id="detailModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Detail Pesanan</h5>
+    
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0"><i class="ti ti-table"></i> Data Penerima Pesanan</h5>
+            <div>
+                <a href="#" class="btn btn-success btn-export-penerima me-2" target="_blank"><i class="ti ti-file-export"></i> Export Excel</a>
+                <a href="#" id="btnPrintPenerima" class="btn btn-primary btn-print-penerima" target="_blank"><i class="ti ti-printer"></i> Print</a>
+            </div>
+            <script>
+    $('#btnPrintPenerima').on('click', function(e) {
+        e.preventDefault();
+        var tgl_awal = $('#tgl_awal').val();
+        var tgl_akhir = $('#tgl_akhir').val();
+        var id_pengguna = $('#id_pengguna').val();
+        var filter_periode = $('#filter_periode').val();
+        var url = 'laporan/print_penerima_pesanan.php?tgl_awal=' + encodeURIComponent(tgl_awal)
+            + '&tgl_akhir=' + encodeURIComponent(tgl_akhir)
+            + '&id_pengguna=' + encodeURIComponent(id_pengguna)
+            + '&filter_periode=' + encodeURIComponent(filter_periode);
+        window.open(url, '_blank');
+    });
+    </script>
+  </div>
+
+  
+  <div class="card-body">
+    <!-- <div class="row mb-3"> -->
+      <!-- <div class="col-md-6"> -->
+        <!-- Dropdown tampilkan entri (opsional, jika pakai DataTables bisa otomatis) -->
+        <!-- <label>Tampilkan -->
+          <!-- <select id="showEntries" class="form-select form-select-sm d-inline-block" style="width:auto;"> -->
+            <!-- <option>10</option><option>25</option><option>50</option> -->
+          <!-- </select> -->
+        <!-- entri</label> -->
+      <!-- </div> -->
+      <!-- <div class="col-md-6 text-end"> -->
+        <!-- Fitur cari -->
+        <!-- <label>Cari: <input type="search" id="searchInput" class="form-control form-control-sm d-inline-block" style="width:auto;"></label> -->
+      <!-- </div> -->
+    <!-- </div> -->
+    <!-- DataTables CSS & JS CDN -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+
+
+<div class="table-responsive">
+  <table id="penerimaPesananTable" class="table table-bordered table-hover">
+    <thead>
+      <tr>
+        <th>No</th>
+        <th>Nama Penerima</th>
+        <th>Jumlah Pesanan</th>
+        <th>Total Nilai Pesanan</th>
+        <th>Rata-rata Nilai Pesanan</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
+</div>
+<script>
+$(document).ready(function() {
+    // Inisialisasi DataTables
+    $('#penerimaPesananTable').DataTable({
+        "paging": true,
+        "lengthChange": true,
+        "searching": true,
+        "ordering": false,
+        "info": true,
+        "autoWidth": false,
+        "responsive": true,
+        "language": {
+            "search": "Cari:",
+            "lengthMenu": "Tampilkan _MENU_ entri",
+            "info": "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
+            "infoEmpty": "Menampilkan 0 sampai 0 dari 0 entri",
+            "infoFiltered": "(disaring dari _MAX_ entri keseluruhan)",
+            "zeroRecords": "Tidak ada data",
+            "paginate": {
+                "first": "Pertama",
+                "last": "Terakhir",
+                "next": "Selanjutnya",
+                "previous": "Sebelumnya"
+            },
+        }
+    });
+});
+</script>
+  </div>
+</div>
+
+<!-- Modal Detail -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Detail Pesanan</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body" id="detailContent">

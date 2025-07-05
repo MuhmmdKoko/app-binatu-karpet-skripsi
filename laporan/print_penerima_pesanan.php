@@ -7,6 +7,8 @@ if ($_SESSION['role'] != "Admin") {
     echo '<script>alert("Anda tidak memiliki akses ke halaman ini!");window.location.href="../../index.php";</script>';
     exit;
 }
+$nama_lengkap = isset($_SESSION['nama_lengkap']) ? $_SESSION['nama_lengkap'] : '-';
+session_write_close();
 ?>
 <html>
 <head>
@@ -139,17 +141,17 @@ if ($_SESSION['role'] != "Admin") {
         </tr>
         <tr>
             <td>Rata-rata Pesanan per Penerima</td>
-            <td><?= number_format($total_pesanan / ($no - 1), 1) ?></td>
+            <td><?= ($no - 1) > 0 ? number_format($total_pesanan / ($no - 1), 1) : '0.0' ?></td>
         </tr>
         <tr>
             <td>Rata-rata Nilai per Penerima</td>
-            <td>Rp <?= number_format($total_nilai / ($no - 1), 0, ',', '.') ?></td>
+            <td>Rp <?= ($no - 1) > 0 ? number_format($total_nilai / ($no - 1), 0, ',', '.') : '0' ?></td>
         </tr>
     </table>
 
     <div class="footer">
         <p>Dicetak pada: <?= date('d/m/Y H:i:s') ?></p>
-        <p>Dicetak oleh: <?= htmlspecialchars($_SESSION['nama_lengkap']) ?></p>
+        <p>Dicetak oleh: <?= htmlspecialchars($nama_lengkap) ?></p>
     </div>
 
     <div class="no-print" style="margin-top: 20px;">
