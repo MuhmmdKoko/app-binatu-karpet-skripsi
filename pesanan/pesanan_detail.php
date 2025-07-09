@@ -6,7 +6,38 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['Admin','Karyawan
     exit;
 }
 include "pengaturan/koneksi.php";
-include "../template/header.php";
+// --- Helper Notifikasi (agar tidak error fatal) ---
+require_once __DIR__ . '/../pengaturan/telegram_utils.php';
+if (!function_exists('kirim_notifikasi_pelanggan')) {
+    function kirim_notifikasi_pelanggan($id_pelanggan, $pesan, $channel = 'Telegram') {
+        global $konek, $TELEGRAM_BOT_TOKEN;
+        if ($channel !== 'Telegram') return false;
+        $q = mysqli_query($konek, "SELECT id_telegram FROM pelanggan WHERE id_pelanggan='$id_pelanggan' LIMIT 1");
+        $row = mysqli_fetch_assoc($q);
+        if (empty($row['id_telegram'])) {
+            error_log("[TELEGRAM] Gagal: id_telegram pelanggan kosong untuk id_pelanggan $id_pelanggan");
+            return false;
+        }
+        $chat_id = $row['id_telegram'];
+        $pesan = trim($pesan);
+        $result = send_telegram_message($TELEGRAM_BOT_TOKEN, $chat_id, $pesan, 'HTML');
+        if (!$result) {
+            error_log("[TELEGRAM] Gagal kirim ke $chat_id oleh utilitas telegram_utils.php");
+        }
+        return $result;
+    }
+}
+if (!function_exists('catat_notifikasi')) {
+    function catat_notifikasi($konek, $id_pesanan, $id_pelanggan, $pesan, $channel = 'Telegram', $tipe = 'Status Pesanan') {
+        $pesan_sql = mysqli_real_escape_string($konek, $pesan);
+        $channel_sql = mysqli_real_escape_string($konek, $channel);
+        $tipe_sql = mysqli_real_escape_string($konek, $tipe);
+        $query = "INSERT INTO notifikasi (id_pesanan, id_pelanggan, pesan, waktu_kirim, channel, tipe_notifikasi, status_pengiriman)
+                  VALUES ('$id_pesanan', '$id_pelanggan', '$pesan_sql', NOW(), '$channel_sql', '$tipe_sql', 'Terkirim')";
+        mysqli_query($konek, $query);
+    }
+}
+
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if (!$id) {
     echo '<script>alert("ID pesanan tidak valid");window.history.back();</script>';
@@ -63,6 +94,45 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
             <?php endif; ?>
             <a href="?page=pesanan_status_proses&id=<?= $id ?>" class="btn btn-warning btn-sm">Status Proses</a>
             <a href="?page=pesanan_read" class="btn btn-secondary btn-sm">Kembali</a>
+            <?php if($row['status_pesanan_umum']==='Selesai' && !in_array($row['status_pesanan_umum'], ['Diambil','Dibatalkan'])): ?>
+            <form method="post" style="display:inline; margin-top:10px;">
+                <button name="jadikan_diambil" class="btn btn-success" onclick="return confirm('Jadikan pesanan ini Diambil?')">Jadikan Diambil</button>
+            </form>
+            <?php endif; ?>
+            <?php
+            if (isset($_POST['jadikan_diambil']) && $row['status_pesanan_umum']==='Selesai') {
+                if ($row['status_pembayaran'] !== 'Lunas') {
+                    echo '<script>alert("Pembayaran belum lunas, silakan lunasi pembayaran terlebih dahulu!");window.location="?page=pesanan_detail&id='.$id.'";</script>';
+                    exit;
+                }
+                $update_query = "UPDATE pesanan SET status_pesanan_umum='Diambil', tanggal_diambil=NOW() WHERE id_pesanan=$id";
+                if (mysqli_query($konek, $update_query)) {
+                    $id_pengguna = $_SESSION['id_pengguna'];
+                    $log_umum_sql = "INSERT INTO riwayat_status_pesanan (id_pesanan, status_sebelumnya, status_baru, id_pengguna, waktu_perubahan) VALUES ('$id', 'Selesai', 'Diambil', '$id_pengguna', NOW())";
+                    mysqli_query($konek, $log_umum_sql);
+                    // Update semua status item menjadi Diambil dan log riwayat item
+                    $res_items = mysqli_query($konek, "SELECT id_detail_pesanan, status_item_terkini FROM detail_pesanan WHERE id_pesanan=$id");
+                    while ($item = mysqli_fetch_assoc($res_items)) {
+                        $id_detail = $item['id_detail_pesanan'];
+                        $old_status = $item['status_item_terkini'];
+                        if ($old_status != 'Diambil') {
+                            mysqli_query($konek, "UPDATE detail_pesanan SET status_item_terkini='Diambil' WHERE id_detail_pesanan=$id_detail");
+                            $log_item_sql = "INSERT INTO riwayat_status_item (id_detail_pesanan, status_sebelumnya, status_baru, id_pengguna, waktu_perubahan) VALUES ('$id_detail', '".mysqli_real_escape_string($konek,$old_status)."', 'Diambil', '$id_pengguna', NOW())";
+                            mysqli_query($konek, $log_item_sql);
+                        }
+                    }
+                    $id_pelanggan = $row['id_pelanggan'];
+                    $pesan_notif = "Status pesanan Anda dengan nomor invoice ".$row['nomor_invoice']." telah berubah menjadi: Diambil.";
+                    kirim_notifikasi_pelanggan($id_pelanggan, $pesan_notif, 'Telegram');
+                    catat_notifikasi($konek, $id, $id_pelanggan, $pesan_notif, 'Telegram', 'Status Pesanan');
+                    echo '<script>alert("Pesanan sudah dijadikan Diambil.");window.location="?page=pesanan_detail&id='.$id.'";</script>';
+                    exit;
+                } else {
+                    echo '<script>alert("Gagal update status pesanan!");window.location="?page=pesanan_detail&id='.$id.'";</script>';
+                    exit;
+                }
+            }
+            ?>
         </div>
     </div>
     <div class="card mb-3">
@@ -97,8 +167,8 @@ if (($d['satuan'] === 'm2' || $d['satuan'] === 'm²') && $d['panjang_karpet'] > 
 ?>
 </td>
                         <td><?= htmlspecialchars($d['kuantitas']) . ' ' . htmlspecialchars($d['satuan']) ?></td>
-                        <td>Rp<?= number_format($d['harga_saat_pesan'],2,',','.') ?></td>
-                        <td>Rp<?= number_format($d['subtotal_item'],2,',','.') ?></td>
+                        <td>Rp<?= number_format($d['harga_saat_pesan'],0,',','.') ?></td>
+                        <td>Rp<?= number_format($d['subtotal_item'],0,',','.') ?></td>
                         <td><?= htmlspecialchars($d['status_item_terkini']) ?></td>
                         <td><?= htmlspecialchars($d['catatan_item']) ?></td>
                     </tr>
@@ -107,13 +177,21 @@ if (($d['satuan'] === 'm2' || $d['satuan'] === 'm²') && $d['panjang_karpet'] > 
             </table>
             </div>
             <div class="text-end">
-                <h5 class="mb-1">Subtotal: Rp<?= number_format($row['total_harga_keseluruhan'], 2, ',', '.') ?></h5>
+                <?php
+// Hitung ulang subtotal dari detail item (jika ingin pastikan akurat dari data per item)
+mysqli_data_seek($detail, 0); // reset pointer
+$subtotal_penuh = 0;
+while($dtmp = mysqli_fetch_assoc($detail)) {
+    $subtotal_penuh += (int)$dtmp['subtotal_item'];
+}
+?>
+<h5 class="mb-1">Subtotal: Rp<?= number_format($subtotal_penuh, 0, ',', '.') ?></h5>
 <!-- DEBUG: <?= $row['total_harga_keseluruhan'] ?> -->
 <?php if (!empty($row['diskon']) && $row['diskon'] > 0): ?>
-    <div class="text-danger">Diskon: -Rp<?= number_format($row['diskon'], 2, ',', '.') ?></div>
-    <h4 class="mt-2">Total: Rp<?= number_format($row['total_setelah_diskon'], 2, ',', '.') ?></h4>
+    <div class="text-danger">Diskon: -Rp<?= number_format($row['diskon'], 0, ',', '.') ?></div>
+    <h4 class="mt-2">Total: Rp<?= number_format($row['total_setelah_diskon'], 1, ',', '.') ?></h4>
 <?php else: ?>
-    <h4 class="mt-2">Total: Rp<?= number_format($row['total_harga_keseluruhan'], 2, ',', '.') ?></h4>
+    <h4 class="mt-2">Total: Rp<?= number_format($row['total_harga_keseluruhan'], 0, ',', '.') ?></h4>
 <?php endif; ?>
             </div>
         </div>

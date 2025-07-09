@@ -1,5 +1,5 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
 include "pengaturan/koneksi.php";
 
 // Filter date handling
@@ -30,19 +30,29 @@ if ($_SESSION['role'] != "Admin") {
             <h5 class="card-title mb-0"><i class="ti ti-filter-check"></i> Filter Laporan</h5>
         </div>
         <div class="card-body">
-            <form method="GET" action="" class="row g-3 align-items-end">
+            <form method="GET" action="" class="row g-3 align-items-end" id="filterForm">
                 <input type="hidden" name="page" value="laporan_analisis_waktu_read">
-                <div class="col-md-4">
-                    <label for="start_date" class="form-label">Tanggal Mulai</label>
-                    <input type="date" id="start_date" name="start_date" class="form-control" value="<?= htmlspecialchars($start_date) ?>">
-                </div>
-                <div class="col-md-4">
-                    <label for="end_date" class="form-label">Tanggal Selesai</label>
-                    <input type="date" id="end_date" name="end_date" class="form-control" value="<?= htmlspecialchars($end_date) ?>">
+                <div class="col-md-3">
+                    <label for="periode" class="form-label">Periode</label>
+                    <select id="periode" name="periode" class="form-select">
+                        <option value="hari" <?= (isset($_GET['periode']) && $_GET['periode']=='hari')?'selected':''; ?>>Hari Ini</option>
+                        <option value="kemarin" <?= (isset($_GET['periode']) && $_GET['periode']=='kemarin')?'selected':''; ?>>Kemarin</option>
+                        <option value="minggu" <?= (isset($_GET['periode']) && $_GET['periode']=='minggu')?'selected':''; ?>>Minggu Ini</option>
+                        <option value="bulan" <?= (!isset($_GET['periode']) || $_GET['periode']=='bulan')?'selected':''; ?>>Bulan Ini</option>
+                        <option value="custom" <?= (isset($_GET['periode']) && $_GET['periode']=='custom')?'selected':''; ?>>Custom</option>
+                    </select>
                 </div>
                 <div class="col-md-3">
+                    <label for="start_date" class="form-label">Tanggal Mulai</label>
+                    <input type="date" id="start_date" name="start_date" class="form-control" value="<?= htmlspecialchars($start_date) ?>" <?= (isset($_GET['periode']) && $_GET['periode']!='custom')?'readonly':''; ?> >
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Tanggal Selesai</label>
+                    <input type="date" id="end_date" name="end_date" class="form-control" value="<?= htmlspecialchars($end_date) ?>" <?= (isset($_GET['periode']) && $_GET['periode']!='custom')?'readonly':''; ?> >
+                </div>
+                <div class="col-md-2">
                     <label for="jenis_layanan" class="form-label">Jenis Layanan</label>
-                    <select id="jenis_layanan" name="jenis_layanan" class="form-control">
+                    <select id="jenis_layanan" name="jenis_layanan" class="form-select">
                         <option value="">Semua Layanan</option>
                         <?php
                         $query = "SELECT id_layanan, nama_layanan FROM layanan ORDER BY nama_layanan";
@@ -59,11 +69,63 @@ if ($_SESSION['role'] != "Admin") {
                     <button type="submit" class="btn btn-primary w-100"><i class="ti ti-filter-check"></i> Filter</button>
                 </div>
             </form>
+<script>
+$(function(){
+    function setTanggalByPeriode(val) {
+        var now = new Date();
+        var yyyy = now.getFullYear();
+        var mm = (now.getMonth()+1).toString().padStart(2,'0');
+        var dd = now.getDate().toString().padStart(2,'0');
+        if(val==='hari') {
+            $('#start_date').val(yyyy+'-'+mm+'-'+dd);
+            $('#end_date').val(yyyy+'-'+mm+'-'+dd);
+        } else if(val==='kemarin') {
+            var kemarin = new Date(now.getTime() - 86400000);
+            var ky = kemarin.getFullYear();
+            var km = (kemarin.getMonth()+1).toString().padStart(2,'0');
+            var kd = kemarin.getDate().toString().padStart(2,'0');
+            $('#start_date').val(ky+'-'+km+'-'+kd);
+            $('#end_date').val(ky+'-'+km+'-'+kd);
+        } else if(val==='minggu') {
+            var first = new Date(now.setDate(now.getDate() - now.getDay() + 1));
+            var last = new Date(now.setDate(first.getDate() + 6));
+            var fy = first.getFullYear();
+            var fm = (first.getMonth()+1).toString().padStart(2,'0');
+            var fd = first.getDate().toString().padStart(2,'0');
+            var ly = last.getFullYear();
+            var lm = (last.getMonth()+1).toString().padStart(2,'0');
+            var ld = last.getDate().toString().padStart(2,'0');
+            $('#start_date').val(fy+'-'+fm+'-'+fd);
+            $('#end_date').val(ly+'-'+lm+'-'+ld);
+        } else if(val==='bulan') {
+            $('#start_date').val(yyyy+'-'+mm+'-01');
+            var lastDay = new Date(yyyy, mm, 0).getDate();
+            $('#end_date').val(yyyy+'-'+mm+'-'+lastDay);
+        }
+        if(val!=='custom') {
+            $('#start_date,#end_date').prop('readonly',true);
+        } else {
+            $('#start_date,#end_date').prop('readonly',false);
+        }
+    }
+    $('#periode').on('change', function(){
+        setTanggalByPeriode(this.value);
+        $('#filterForm').submit();
+    });
+    $('#start_date,#end_date,#jenis_layanan').on('change', function(){
+        $('#periode').val('custom');
+        $('#start_date,#end_date').prop('readonly',false);
+        $('#filterForm').submit();
+    });
+    // Inisialisasi awal jika reload
+    setTanggalByPeriode($('#periode').val());
+});
+</script>
         </div>
     </div>
 
     <!-- Statistik Ringkas -->
-    <div class="row mb-4">
+    <div class="row mb-3">
         <?php
         // Get time analysis statistics
         $where = "WHERE p.tanggal_masuk BETWEEN '$start_date' AND '$end_date'";
@@ -96,47 +158,43 @@ if ($_SESSION['role'] != "Admin") {
 
         // Calculate if overdue
         $is_overdue = $stats['rata_waktu_pengerjaan'] > $stats['rata_estimasi'];
-        $status_class = $is_overdue ? 'bg-danger' : 'bg-info';
         $rata_waktu = number_format($stats['rata_waktu_pengerjaan'], 1);
         $rata_estimasi = number_format($stats['rata_estimasi'], 1);
         $rata_keterlambatan = number_format($stats['rata_keterlambatan'], 1);
+        $ketepatan_waktu = is_null($stats['ketepatan_waktu']) ? '0.0' : number_format($stats['ketepatan_waktu'], 1);
         ?>
-        <div class="col-md-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-1">Total Pesanan</h5>
-                    <div class="fs-3 fw-bold"><?= $stats['total_pesanan'] ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-1">Rata-rata Waktu Pengerjaan</h5>
-                    <div class="fs-5 mb-1">
-                        <span class="badge <?= $status_class ?> text-white"><i class="ti ti-clock"></i> <?= $rata_waktu ?> Hari</span>
+        <div class="col-12">
+        <div class="card shadow-sm border border-1 border-primary-subtle bg-light mb-2" style="border-radius:12px;">
+            <div class="card-body py-3 px-3">
+                <div class="row g-2 text-center">
+                    <div class="col-md-3 col-6 mb-2 mb-md-0">
+                        <div class="fw-semibold text-secondary mb-1"><i class="ti ti-list-details"></i> Total Pesanan</div>
+                        <div class="fs-3 fw-bold text-primary" title="Total pesanan dalam periode ini"><?= $stats['total_pesanan'] ?></div>
                     </div>
-                    <?php if ($is_overdue): ?>
-                        <small class="text-danger">(melebihi estimasi <?= $rata_estimasi ?> hari)</small>
-                    <?php endif; ?>
+                    <div class="col-md-3 col-6 mb-2 mb-md-0">
+                        <div class="fw-semibold text-secondary mb-1"><i class="ti ti-clock"></i> Rata-rata Waktu</div>
+                        <span class="badge rounded-pill <?= $is_overdue ? 'bg-danger' : 'bg-info' ?> text-white fs-6 px-3 py-2" title="<?= $is_overdue ? 'Melebihi estimasi '.$rata_estimasi.' hari' : 'Sesuai estimasi '.$rata_estimasi.' hari' ?>">
+                            <?= $rata_waktu ?> Hari
+                        </span>
+                        <?php if ($is_overdue): ?>
+                            <small class="text-danger d-block mt-1">(Melebihi estimasi <?= $rata_estimasi ?> hari)</small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="fw-semibold text-secondary mb-1"><i class="ti ti-check"></i> Ketepatan Waktu</div>
+                        <span class="badge rounded-pill bg-success fs-6 px-3 py-2" title="Persentase pesanan selesai tepat waktu">
+                            <?= $ketepatan_waktu ?>%
+                        </span>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="fw-semibold text-secondary mb-1"><i class="ti ti-alert-circle"></i> Rata-rata Keterlambatan</div>
+                        <span class="badge rounded-pill <?= ($rata_keterlambatan>0)?'bg-warning text-dark':'bg-success' ?> fs-6 px-3 py-2" title="Rata-rata hari keterlambatan pesanan">
+                            <?= $rata_keterlambatan ?> Hari
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-1">Ketepatan Waktu</h5>
-                    <div class="fs-5"><span class="badge bg-success"><i class="ti ti-check"></i> <?= $stats['ketepatan_waktu'] ?>%</span></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title mb-1">Rata-rata Keterlambatan</h5>
-                    <div class="fs-5"><span class="badge bg-danger"><i class="ti ti-alert-circle"></i> <?= $rata_keterlambatan ?> Hari</span></div>
-                </div>
-            </div>
         </div>
     </div>
 

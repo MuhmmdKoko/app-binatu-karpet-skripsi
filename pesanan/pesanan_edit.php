@@ -6,7 +6,6 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['Admin','Karyawan
     exit;
 }
 include "pengaturan/koneksi.php";
-include "../template/header.php";
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 if(!$id){
     echo '<script>alert("ID pesanan tidak valid");window.history.back();</script>';
@@ -33,6 +32,14 @@ $resD=mysqli_query($konek,"SELECT * FROM detail_pesanan WHERE id_pesanan=$id");
 while($d=mysqli_fetch_assoc($resD)){$detailArr[]=$d;}
 
 $err=$sukses='';
+// PATCH: Ambil kode promo dari tabel promosi jika kode_promo kosong tapi id_promosi ada
+$kode_promo_pesanan = (isset($rowPes['kode_promo']) && $rowPes['kode_promo']) ? $rowPes['kode_promo'] : '';
+if (!$kode_promo_pesanan && !empty($rowPes['id_promosi'])) {
+    $qPromo = mysqli_query($konek, "SELECT kode_promo FROM promosi WHERE id_promosi=".(int)$rowPes['id_promosi']);
+    if ($promoRow = mysqli_fetch_assoc($qPromo)) {
+        $kode_promo_pesanan = $promoRow['kode_promo'];
+    }
+}
 if(isset($_POST['submit_edit'])){
     // Ambil data dari form
     $catatan_pesanan = mysqli_real_escape_string($konek, trim($_POST['catatan_pesanan']));
@@ -77,11 +84,23 @@ if(isset($_POST['submit_edit'])){
     mysqli_begin_transaction($konek);
 
     try {
+        // Ambil total harga keseluruhan dari POST tanpa str_replace
+        $total_harga_baru = isset($_POST['total_harga_keseluruhan']) ? floatval($_POST['total_harga_keseluruhan']) : 0;
+        error_log("DEBUG FINAL: total_harga_baru=$total_harga_baru, POST=".$_POST['total_harga_keseluruhan']);
         // Ambil promo jika ada
         $id_promosi = (isset($_POST['id_promosi']) && intval($_POST['id_promosi']) > 0) ? intval($_POST['id_promosi']) : 'NULL';
-        $diskon = isset($_POST['diskon']) ? intval(round(floatval($_POST['diskon']))) : 0;
-        $total_setelah_diskon = isset($_POST['total_setelah_diskon']) ? intval(round(floatval($_POST['total_setelah_diskon']))) : $total_harga_baru;
+        $diskon = isset($_POST['diskon']) ? floatval(str_replace(['.',','], ['', '.'], $_POST['diskon'])) : 0;
+        $total_setelah_diskon = isset($_POST['total_setelah_diskon']) ? floatval($_POST['total_setelah_diskon']) : $total_harga_baru;
+        // Jika kode promo kosong, pastikan semua field promo direset
+        $kode_promo = isset($_POST['kode_promo']) ? trim($_POST['kode_promo']) : '';
+        if ($kode_promo === '') {
+            $id_promosi = 'NULL';
+            $diskon = 0;
+            $total_setelah_diskon = $total_harga_baru;
+        }
 
+        // DEBUG: Log total_harga_baru sebelum update
+        error_log("DEBUG TOTAL: total_harga_baru=$total_harga_baru, diskon=$diskon, total_setelah_diskon=$total_setelah_diskon");
         // 1. Update tabel pesanan utama dengan total dan estimasi baru
         $sql_update_pesanan = "UPDATE pesanan SET 
                                 catatan_pesanan='$catatan_pesanan', 
@@ -104,11 +123,17 @@ if(isset($_POST['submit_edit'])){
         foreach($items as $it){
             $id_layanan = intval($it['id_layanan'] ?? 0);
             if($id_layanan == 0) continue;
+            // Pastikan harga satuan dan subtotal dalam ribuan penuh (misal: 18000 untuk Rp18.000)
+            $harga_saat_pesan = isset($it['harga_saat_pesan']) ? floatval(str_replace(['.',','], ['', '.'], $it['harga_saat_pesan'])) : 0;
+            $kuantitas = isset($it['kuantitas']) ? floatval(str_replace(',', '.', $it['kuantitas'])) : 0;
+            $subtotal_item = $harga_saat_pesan * $kuantitas;
+            error_log("DEBUG ITEM: id_layanan=$id_layanan, harga_saat_pesan=$harga_saat_pesan, kuantitas=$kuantitas, subtotal_item=$subtotal_item");
+
 
             $deskripsi = mysqli_real_escape_string($konek, $it['deskripsi_item_spesifik'] ?? '');
             $qty = floatval($it['kuantitas'] ?? 0);
-            $harga = floatval(str_replace(',', '', $it['harga_saat_pesan'] ?? '0'));
-            $subtotal = floatval(str_replace(',', '', $it['subtotal_item'] ?? '0'));
+            $harga = isset($it['harga_saat_pesan']) ? floatval(str_replace(['.',','], ['', '.'], $it['harga_saat_pesan'])) : 0;
+            $subtotal = $subtotal_item;
             $cat_item = mysqli_real_escape_string($konek, $it['catatan_item'] ?? '');
             $panjang_karpet = isset($it['panjang_karpet']) ? floatval($it['panjang_karpet']) : 0;
             $lebar_karpet = isset($it['lebar_karpet']) ? floatval($it['lebar_karpet']) : 0;
@@ -207,8 +232,8 @@ if(isset($_POST['submit_edit'])){
                                     <input type="number" step="0.01" min="0" class="form-control qty-item qty-item-standard" name="item[<?= $idx ?>][kuantitas]" value="<?= $det['kuantitas'] ?>" required>
                                 </div>
                                 </td>
-                                <td><input type="text" class="form-control harga-item" name="item[<?= $idx ?>][harga_saat_pesan]" value="<?= $det['harga_saat_pesan'] ?>" readonly></td>
-                                <td><input type="text" class="form-control subtotal-item" name="item[<?= $idx ?>][subtotal_item]" value="<?= $det['subtotal_item'] ?>" readonly></td>
+                                <td><input type="text" class="form-control harga-item" name="item[<?= $idx ?>][harga_saat_pesan]" value="<?= str_replace([',','.'], '', $det['harga_saat_pesan']) ?>" readonly></td>
+                                <td><input type="text" class="form-control subtotal-item" name="item[<?= $idx ?>][subtotal_item]" value="<?= str_replace([',','.'], '', $det['subtotal_item']) ?>" readonly></td>
                                 <td><input type="text" class="form-control" name="item[<?= $idx ?>][catatan_item]" value="<?= htmlspecialchars($det['catatan_item']) ?>"></td>
                                 <td><button type="button" class="btn btn-danger btn-sm btnHapusItem">Hapus</button></td>
                                 <input type="hidden" name="item[<?= $idx ?>][estimasi_hari]" value="<?= $det['estimasi_hari'] ?? 0 ?>">
@@ -225,16 +250,110 @@ if(isset($_POST['submit_edit'])){
             <div class="card-body">
                 <h5 class="card-title">3. Konfirmasi Pesanan</h5>
                 <div class="row mb-2 align-items-end">
-                    <div class="col-md-4">
-                        <label for="kode_promo">Kode Promo</label>
-                        <div class="input-group mb-2">
-                            <input type="text" class="form-control" name="kode_promo" id="kode_promo" value="<?= htmlspecialchars($rowPes['kode_promo'] ?? '') ?>" placeholder="Masukkan kode promo">
-                            <button type="button" class="btn btn-info" id="btnCekPromo">Cek Promo</button>
-                        </div>
-                        <div id="promo_info" class="small text-success"></div>
-                        <input type="hidden" name="id_promosi" id="id_promosi" value="<?= htmlspecialchars($rowPes['id_promosi'] ?? '') ?>">
-                        <input type="hidden" name="diskon" id="diskon" value="<?= htmlspecialchars($rowPes['diskon'] ?? '') ?>">
-                    </div>
+    <div class="col-md-5 col-12 mb-2 mb-md-0">
+        <label for="kode_promo" class="form-label">Kode Promo</label>
+<div class="input-group mb-2">
+    <select class="form-select" id="dropdown_promo">
+        <option value="">-- Pilih Promo Aktif --</option>
+        <option value="__manual__">Ketik Manual</option>
+    </select>
+    <input type="text" class="form-control" name="kode_promo" id="kode_promo" value="<?= htmlspecialchars($kode_promo_pesanan) ?>" placeholder="Masukkan kode promo" autocomplete="off" style="display:none">
+    <button type="button" class="btn btn-info d-flex align-items-center gap-1" id="btnCekPromo">
+        <span>Cek Promo</span>
+        <span class="spinner-border spinner-border-sm d-none" id="promoSpinner" role="status" aria-hidden="true"></span>
+    </button>
+</div>
+<script>
+$(function(){
+    // Fetch promo list
+    $.get('pesanan/promo_dropdown_fetch.php', {kode_promo_pesanan: '<?= addslashes($kode_promo_pesanan) ?>'}, function(list) {
+        var dropdown = $('#dropdown_promo');
+        dropdown.find('option:not([value=""]):not([value="__manual__"])').remove();
+        var currentKode = '<?= addslashes($kode_promo_pesanan) ?>'.toLowerCase();
+        var found = false;
+        $.each(list, function(i, p) {
+            var label = p.judul + ' ['+p.kode_promo+']';
+            if(p.status !== 'aktif') label += ' (Tidak Aktif)';
+            var opt = $('<option>').val((p.kode_promo||'').toLowerCase()).text(label);
+            if(p.status !== 'aktif') opt.prop('disabled',true);
+            if(p.kode_promo && p.kode_promo.toLowerCase() === currentKode && currentKode) {
+                opt.prop('selected',true);
+                found = true;
+            }
+            dropdown.append(opt);
+        });
+        if(currentKode) {
+            if(found) {
+                dropdown.val(currentKode).trigger('change');
+                $('#kode_promo').hide();
+            } else {
+                dropdown.val('__manual__').trigger('change');
+                $('#kode_promo').val(currentKode).show();
+            }
+        } else {
+            dropdown.val('');
+            $('#kode_promo').hide();
+        }
+    },'json');
+    // On change dropdown
+    $('#dropdown_promo').on('change', function(){
+        var val = $(this).val();
+        if(val === '__manual__') {
+            $('#kode_promo').val('').show().focus();
+        } else if(val) {
+            $('#kode_promo').val(val).hide();
+            // Otomatis cek promo
+            var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
+            $('#btnCekPromo').prop('disabled', true);
+            $('#promoSpinner').removeClass('d-none');
+            $.post('pesanan/promo_cek.php', {kode: val, total: total}, function(res) {
+                if (res.status === 'ok') {
+                    $('#promo_info').html('<span class="badge bg-success">'+res.msg+'</span>').removeClass('text-danger').addClass('text-success');
+                    $('#id_promosi').val(res.id_promosi);
+                    $('#diskon').val(res.diskon);
+                    $('#display_diskon').text(parseInt(res.diskon).toLocaleString('id-ID'));
+                    $('#ringkasan_diskon').show();
+                    var totalAkhir = Math.max(0, total - res.diskon);
+                    $('#total_display').val(totalAkhir.toLocaleString('id-ID'));
+                    $('#total_setelah_diskon').val(totalAkhir);
+                } else {
+                    $('#promo_info').html('<span class="badge bg-danger">'+res.msg+'</span>').removeClass('text-success').addClass('text-danger');
+                    $('#id_promosi').val('');
+                    $('#diskon').val('');
+                    $('#display_diskon').text('0');
+                    $('#ringkasan_diskon').hide();
+                    $('#total_display').val(total.toLocaleString('id-ID'));
+                    $('#total_setelah_diskon').val(total);
+                }
+            }, 'json').always(function() {
+                $('#btnCekPromo').prop('disabled', false);
+                $('#promoSpinner').addClass('d-none');
+            });
+        } else {
+            $('#kode_promo').val('').hide();
+            $('#promo_info').text('');
+            $('#id_promosi').val('');
+            $('#diskon').val('');
+            $('#display_diskon').text('0');
+            $('#ringkasan_diskon').hide();
+            var total = parseInt($('#total_harga_keseluruhan').val()) || 0;
+            $('#total_display').val(total.toLocaleString('id-ID'));
+            $('#total_setelah_diskon').val(total);
+        }
+    });
+    // Jika input manual diubah, dropdown ikut ke manual
+    $('#kode_promo').on('input', function(){
+        $('#dropdown_promo').val('__manual__');
+    });
+});
+</script>
+        <?php if (!empty($rowPes['kode_promo'])): ?>
+            <span class="badge bg-success mb-1">Promo aktif: <?= htmlspecialchars($rowPes['kode_promo']) ?></span>
+        <?php endif; ?>
+        <div id="promo_info" class="small"></div>
+        <input type="hidden" name="id_promosi" id="id_promosi" value="<?= htmlspecialchars($rowPes['id_promosi'] ?? '') ?>">
+        <input type="hidden" name="diskon" id="diskon" value="<?= htmlspecialchars($rowPes['diskon'] ?? '') ?>">
+    </div>
                     <div class="col-md-8 text-end">
                         <div id="ringkasan_diskon" style="display:none">
                             <span class="text-muted">Diskon Promo: </span>Rp<span id="display_diskon">0</span><br>
@@ -286,8 +405,8 @@ function hitungTotal(){
    const val=parseFloat($(this).val().replace(/[^\d\.]/g,''))||0;
    total+=val;
  });
- $('#total_display').val(total.toLocaleString());
- $('#total_harga_keseluruhan').val(total); // angka murni untuk submit
+ $('#total_display').val(total.toLocaleString('id-ID'));
+ $('#total_harga_keseluruhan').val(Math.round(total)); // angka bulat rupiah untuk submit
 }
 // Panggil hitung total
 hitungTotal();
@@ -296,23 +415,26 @@ hitungTotal();
 $('#btnCekPromo').on('click', function() {
     var kode = $('#kode_promo').val().trim();
     var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
+    var $btn = $(this);
+    var $spinner = $('#promoSpinner');
     if (!kode) {
         $('#promo_info').text('Kode promo wajib diisi').removeClass('text-success').addClass('text-danger');
         return;
     }
-    $('#btnCekPromo').prop('disabled', true).text('Cek...');
+    $btn.prop('disabled', true);
+    $spinner.removeClass('d-none');
     $.post('pesanan/promo_cek.php', {kode: kode, total: total}, function(res) {
         if (res.status === 'ok') {
-            $('#promo_info').text(res.msg).removeClass('text-danger').addClass('text-success');
+            $('#promo_info').html('<span class="badge bg-success">'+res.msg+'</span>').removeClass('text-danger').addClass('text-success');
             $('#id_promosi').val(res.id_promosi);
             $('#diskon').val(res.diskon);
             $('#display_diskon').text(parseInt(res.diskon).toLocaleString('id-ID'));
             $('#ringkasan_diskon').show();
             var totalAkhir = Math.max(0, total - res.diskon);
             $('#total_display').val(totalAkhir.toLocaleString('id-ID'));
-            $('#total_setelah_diskon').val(totalAkhir);
+            $('#total_setelah_diskon').val(Math.round(totalAkhir));
         } else {
-            $('#promo_info').text(res.msg).removeClass('text-success').addClass('text-danger');
+            $('#promo_info').html('<span class="badge bg-danger">'+res.msg+'</span>').removeClass('text-success').addClass('text-danger');
             $('#id_promosi').val('');
             $('#diskon').val('');
             $('#display_diskon').text('0');
@@ -321,9 +443,20 @@ $('#btnCekPromo').on('click', function() {
             $('#total_setelah_diskon').val(total);
         }
     }, 'json').always(function() {
-        $('#btnCekPromo').prop('disabled', false).text('Cek Promo');
+        $btn.prop('disabled', false);
+        $spinner.addClass('d-none');
     });
 });
+// Jangan reset kode promo jika item berubah, hanya reset status promo dan diskon
+$('#tabelItem').on('input change', '.subtotal-item', function() {
+    $('#id_promosi').val('');
+    $('#diskon').val('');
+    $('#promo_info').text('');
+    $('#ringkasan_diskon').hide();
+    $('#display_diskon').text('0');
+    updatePromoTotal();
+});
+
 function updatePromoTotal() {
     var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
     var diskon = parseFloat($('#diskon').val()) || 0;
@@ -332,7 +465,7 @@ function updatePromoTotal() {
         $('#display_diskon').text(parseInt(diskon).toLocaleString('id-ID'));
         var totalAkhir = Math.max(0, total - diskon);
         $('#total_display').val(totalAkhir.toLocaleString('id-ID'));
-        $('#total_setelah_diskon').val(totalAkhir);
+        $('#total_setelah_diskon').val(Math.round(totalAkhir));
     } else {
         $('#ringkasan_diskon').hide();
         $('#total_display').val(total.toLocaleString('id-ID'));
@@ -353,6 +486,36 @@ $(function(){
     if(diskon>0) { $('#ringkasan_diskon').show(); $('#display_diskon').text(parseInt(diskon).toLocaleString('id-ID')); }
     else { $('#ringkasan_diskon').hide(); }
     updatePromoTotal();
+    // AUTO CEK PROMO JIKA FIELD SUDAH TERISI (EDIT)
+    var kode = $('#kode_promo').val().trim();
+    var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
+    if(kode !== '') {
+        $('#btnCekPromo').prop('disabled', true);
+        $('#promoSpinner').removeClass('d-none');
+        $.post('pesanan/promo_cek.php', {kode: kode, total: total}, function(res) {
+            if (res.status === 'ok') {
+                $('#promo_info').html('<span class="badge bg-success">'+res.msg+'</span>').removeClass('text-danger').addClass('text-success');
+                $('#id_promosi').val(res.id_promosi);
+                $('#diskon').val(res.diskon);
+                $('#display_diskon').text(parseInt(res.diskon).toLocaleString('id-ID'));
+                $('#ringkasan_diskon').show();
+                var totalAkhir = Math.max(0, total - res.diskon);
+                $('#total_display').val(totalAkhir.toLocaleString('id-ID'));
+                $('#total_setelah_diskon').val(totalAkhir);
+            } else {
+                $('#promo_info').html('<span class="badge bg-danger">'+res.msg+'</span>').removeClass('text-success').addClass('text-danger');
+                $('#id_promosi').val('');
+                $('#diskon').val('');
+                $('#display_diskon').text('0');
+                $('#ringkasan_diskon').hide();
+                $('#total_display').val(total.toLocaleString('id-ID'));
+                $('#total_setelah_diskon').val(total);
+            }
+        }, 'json').always(function() {
+            $('#btnCekPromo').prop('disabled', false);
+            $('#promoSpinner').addClass('d-none');
+        });
+    }
 });
 function updateItemRowEdit(tr) {
     var selectedOption = tr.find('.select-layanan').find(':selected');
@@ -382,6 +545,7 @@ function updateItemRowEdit(tr) {
     }
     hitungTotal();
 }
+
 // On page load, show/hide panjang/lebar fields correctly for each row
 $(document).ready(function() {
     $('#tabelItem tbody tr').each(function() {
@@ -404,12 +568,35 @@ $('#tabelItem').on('change input', '.qty-item-standard', function(e) {
 $(document).on('input', '.harga-item, .subtotal-item', function() {
     this.value = this.value.replace(/[^0-9.]/g, '');
 });
-// Bersihkan format angka sebelum submit
+// Pastikan semua input harga satuan, subtotal, dan total setelah diskon adalah angka ribuan penuh/desimal sebelum submit
 $('#formEdit').on('submit',function(){
-  $(this).find('.harga-item, .subtotal-item, #total_harga_keseluruhan').each(function(){
-      this.value=this.value.replace(/[^0-9.]/g,'');
+  // Harga satuan dan subtotal item
+  $(this).find('.harga-item, .subtotal-item').each(function(){
+    // Hilangkan semua karakter selain angka dan titik/koma
+    let val = $(this).val().replace(/[^0-9.,]/g,'');
+    // Jika ada koma sebagai desimal, ubah ke titik
+    val = val.replace(',', '.');
+    // Hilangkan titik ribuan (jika ada), kecuali jika sebagai desimal
+    if(val.split('.').length > 2){
+      // Jika ada lebih dari satu titik, hanya titik terakhir sebagai desimal
+      let parts = val.split('.');
+      let desimal = parts.pop();
+      val = parts.join('') + '.' + desimal;
+    }
+    $(this).val(val);
   });
-  // Kuantitas biarkan saja, tidak diformat
+  // Total setelah diskon
+  let $totalSetelahDiskon = $('#total_setelah_diskon');
+  if($totalSetelahDiskon.length){
+    let val = $totalSetelahDiskon.val().replace(/[^0-9.,]/g,'');
+    val = val.replace(',', '.');
+    if(val.split('.').length > 2){
+      let parts = val.split('.');
+      let desimal = parts.pop();
+      val = parts.join('') + '.' + desimal;
+    }
+    $totalSetelahDiskon.val(val);
+  }
 });
 </script>
 

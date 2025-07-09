@@ -1,7 +1,6 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 include 'pengaturan/koneksi.php';
-include "../template/header.php";
 
 // Filter date handling
 $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-01');
@@ -27,19 +26,29 @@ if ($_SESSION['role'] != "Admin") {
             <h5 class="card-title mb-0"><i class="ti ti-filter-check"></i> Filter Laporan</h5>
         </div>
         <div class="card-body">
-            <form method="GET" action="index.php" class="row g-3 align-items-end">
+            <form method="GET" action="index.php" class="row g-3 align-items-end" id="filterForm">
                 <input type="hidden" name="page" value="laporan_kinerja_karyawan_read">
-                <div class="col-md-4">
-                    <label for="start_date" class="form-label">Tanggal Mulai</label>
-                    <input type="date" id="start_date" name="start_date" class="form-control" value="<?= htmlspecialchars($start_date) ?>">
-                </div>
-                <div class="col-md-4">
-                    <label for="end_date" class="form-label">Tanggal Selesai</label>
-                    <input type="date" id="end_date" name="end_date" class="form-control" value="<?= htmlspecialchars($end_date) ?>">
+                <div class="col-md-3">
+                    <label for="periode" class="form-label">Periode</label>
+                    <select id="periode" name="periode" class="form-select">
+                        <option value="hari" <?= (isset($_GET['periode']) && $_GET['periode']=='hari')?'selected':''; ?>>Hari Ini</option>
+                        <option value="kemarin" <?= (isset($_GET['periode']) && $_GET['periode']=='kemarin')?'selected':''; ?>>Kemarin</option>
+                        <option value="minggu" <?= (isset($_GET['periode']) && $_GET['periode']=='minggu')?'selected':''; ?>>Minggu Ini</option>
+                        <option value="bulan" <?= (!isset($_GET['periode']) || $_GET['periode']=='bulan')?'selected':''; ?>>Bulan Ini</option>
+                        <option value="custom" <?= (isset($_GET['periode']) && $_GET['periode']=='custom')?'selected':''; ?>>Custom</option>
+                    </select>
                 </div>
                 <div class="col-md-3">
+                    <label for="start_date" class="form-label">Tanggal Mulai</label>
+                    <input type="date" id="start_date" name="start_date" class="form-control" value="<?= htmlspecialchars($start_date) ?>" <?= (isset($_GET['periode']) && $_GET['periode']!='custom')?'readonly':''; ?> >
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Tanggal Selesai</label>
+                    <input type="date" id="end_date" name="end_date" class="form-control" value="<?= htmlspecialchars($end_date) ?>" <?= (isset($_GET['periode']) && $_GET['periode']!='custom')?'readonly':''; ?> >
+                </div>
+                <div class="col-md-2">
                     <label for="id_karyawan" class="form-label">Karyawan</label>
-                    <select id="id_karyawan" name="id_karyawan" class="form-control">
+                    <select id="id_karyawan" name="id_karyawan" class="form-select">
                         <option value="">Semua Karyawan</option>
                         <?php
                         $query = "SELECT id_pengguna, nama_lengkap FROM pengguna WHERE role IN ('Admin', 'Karyawan') ORDER BY nama_lengkap";
@@ -56,6 +65,58 @@ if ($_SESSION['role'] != "Admin") {
                     <button type="submit" class="btn btn-primary w-100"><i class="ti ti-filter-check"></i> Filter</button>
                 </div>
             </form>
+<script>
+$(function(){
+    function setTanggalByPeriode(val) {
+        var now = new Date();
+        var yyyy = now.getFullYear();
+        var mm = (now.getMonth()+1).toString().padStart(2,'0');
+        var dd = now.getDate().toString().padStart(2,'0');
+        if(val==='hari') {
+            $('#start_date').val(yyyy+'-'+mm+'-'+dd);
+            $('#end_date').val(yyyy+'-'+mm+'-'+dd);
+        } else if(val==='kemarin') {
+            var kemarin = new Date(now.getTime() - 86400000);
+            var ky = kemarin.getFullYear();
+            var km = (kemarin.getMonth()+1).toString().padStart(2,'0');
+            var kd = kemarin.getDate().toString().padStart(2,'0');
+            $('#start_date').val(ky+'-'+km+'-'+kd);
+            $('#end_date').val(ky+'-'+km+'-'+kd);
+        } else if(val==='minggu') {
+            var first = new Date(now.setDate(now.getDate() - now.getDay() + 1));
+            var last = new Date(now.setDate(first.getDate() + 6));
+            var fy = first.getFullYear();
+            var fm = (first.getMonth()+1).toString().padStart(2,'0');
+            var fd = first.getDate().toString().padStart(2,'0');
+            var ly = last.getFullYear();
+            var lm = (last.getMonth()+1).toString().padStart(2,'0');
+            var ld = last.getDate().toString().padStart(2,'0');
+            $('#start_date').val(fy+'-'+fm+'-'+fd);
+            $('#end_date').val(ly+'-'+lm+'-'+ld);
+        } else if(val==='bulan') {
+            $('#start_date').val(yyyy+'-'+mm+'-01');
+            var lastDay = new Date(yyyy, mm, 0).getDate();
+            $('#end_date').val(yyyy+'-'+mm+'-'+lastDay);
+        }
+        if(val!=='custom') {
+            $('#start_date,#end_date').prop('readonly',true);
+        } else {
+            $('#start_date,#end_date').prop('readonly',false);
+        }
+    }
+    $('#periode').on('change', function(){
+        setTanggalByPeriode(this.value);
+        $('#filterForm').submit();
+    });
+    $('#start_date,#end_date,#id_karyawan').on('change', function(){
+        $('#periode').val('custom');
+        $('#start_date,#end_date').prop('readonly',false);
+        $('#filterForm').submit();
+    });
+    // Inisialisasi awal jika reload
+    setTanggalByPeriode($('#periode').val());
+});
+</script>
         </div>
     </div>
 
@@ -81,13 +142,50 @@ if ($_SESSION['role'] != "Admin") {
                  $where";
         $result = mysqli_query($konek, $query);
         $stats = mysqli_fetch_assoc($result);
-
-        // Calculate if overdue
-        $is_overdue = $stats['rata_waktu_pengerjaan'] > $stats['rata_estimasi'];
-        $status_class = $is_overdue ? 'bg-danger' : 'bg-info';
-        $rata_waktu = number_format($stats['rata_waktu_pengerjaan'], 1);
-        $rata_estimasi = number_format($stats['rata_estimasi'], 1);
+        $total_pesanan = $stats['total_pesanan'] ?? 0;
+        $rata_waktu = isset($stats['rata_waktu_pengerjaan']) ? round($stats['rata_waktu_pengerjaan'],1) : 0;
+        $rata_estimasi = isset($stats['rata_estimasi']) ? round($stats['rata_estimasi'],1) : 0;
+        $ketepatan = isset($stats['ketepatan_waktu']) ? round($stats['ketepatan_waktu'],1) : 0;
+        $is_overdue = $rata_waktu > $rata_estimasi && $rata_estimasi > 0;
         ?>
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+            <div class="card shadow-sm border-0" style="min-width:220px;">
+                <div class="card-body text-center">
+                    <div class="mb-1">
+                        <span class="badge bg-primary"><i class="ti ti-clipboard-check"></i> Total Pesanan</span>
+                    </div>
+                    <div class="fs-3 fw-bold text-primary"><?= number_format($total_pesanan) ?></div>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0" style="min-width:220px;">
+                <div class="card-body text-center">
+                    <div class="mb-1">
+                        <span class="badge <?= $is_overdue ? 'bg-danger' : 'bg-info' ?>"><i class="ti ti-clock"></i> Rata-rata Waktu</span>
+                    </div>
+                    <div class="fs-4 fw-bold <?= $is_overdue ? 'text-danger' : 'text-info' ?>"><?= $rata_waktu ?> hari
+                        <?php if($is_overdue): ?>
+                        <small class="d-block text-danger">(melebihi estimasi <?= $rata_estimasi ?> hari)</small>
+                        <?php elseif($rata_estimasi > 0): ?>
+                        <small class="d-block text-muted">(estimasi <?= $rata_estimasi ?> hari)</small>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0" style="min-width:220px;">
+                <div class="card-body text-center">
+                    <div class="mb-1">
+                        <span class="badge bg-success"><i class="ti ti-check"></i> Ketepatan Waktu</span>
+                    </div>
+                    <div class="fs-4 fw-bold text-success"><?= $ketepatan ?>%</div>
+                </div>
+            </div>
+        </div>
+        <style>
+        @media (max-width: 767px) {
+            .d-flex.flex-wrap.gap-3 > .card { min-width: 120px; }
+        }
+        </style>
+        <!--
         <div class="col-md-4">
             <div class="card h-100">
                 <div class="card-body">
@@ -101,11 +199,11 @@ if ($_SESSION['role'] != "Admin") {
                 <div class="card-body">
                     <h5 class="card-title mb-1">Rata-rata Waktu Pengerjaan</h5>
                     <div class="fs-5 mb-1">
-                        <span class="badge <?= $status_class ?> text-white"><i class="ti ti-clock"></i> <?= $rata_waktu ?> Hari</span>
-                    </div>
-                    <?php if ($is_overdue): ?>
+                        <?= $rata_waktu ?> hari
+                        <?php if($is_overdue): ?>
                         <small class="text-danger">(melebihi estimasi <?= $rata_estimasi ?> hari)</small>
-                    <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -117,6 +215,7 @@ if ($_SESSION['role'] != "Admin") {
                 </div>
             </div>
         </div>
+        -->
     </div>
 
     <!-- Tabel Data Laporan -->
@@ -165,17 +264,16 @@ if ($_SESSION['role'] != "Admin") {
                         $no = 1;
                         
                         while ($row = mysqli_fetch_assoc($result)) {
-                            $is_row_overdue = $row['rata_waktu'] > $row['rata_estimasi'];
-                            $row_status_class = $is_row_overdue ? 'text-danger' : 'text-info';
-                            
-                            echo "<tr>";
+                            $is_row_overdue = $row['rata_waktu'] > $row['rata_estimasi'] && $row['rata_estimasi'] > 0;
+                            $row_status_class = $is_row_overdue ? 'table-danger' : '';
+                            $badge_class = $is_row_overdue ? 'bg-danger' : 'bg-info';
+                            $tooltip = $is_row_overdue ? 'Melebihi estimasi ' . number_format($row['rata_estimasi'],1) . ' hari' : 'Sesuai estimasi (' . number_format($row['rata_estimasi'],1) . ' hari)';
+                            echo "<tr class='$row_status_class'>";
                             echo "<td>" . $no++ . "</td>";
                             echo "<td>" . htmlspecialchars($row['nama_karyawan']) . "</td>";
                             echo "<td>" . number_format($row['total_pesanan']) . "</td>";
-                            echo "<td class='" . $row_status_class . "'>" . 
-                                 number_format($row['rata_waktu'], 1) . 
-                                 ($is_row_overdue ? ' <small>(est. ' . number_format($row['rata_estimasi'], 1) . ')</small>' : '') . 
-                                 "</td>";
+                            echo "<td><span class='badge $badge_class' data-bs-toggle='tooltip' title='$tooltip'>" . number_format($row['rata_waktu'], 1) . 
+                                 "</span></td>";
                             echo "<td>" . number_format($row['ketepatan_waktu'], 1) . "%</td>";
                             echo "<td>
                                     <button type='button' class='btn btn-info btn-sm' onclick='showDetail(\"" . $row['id_karyawan'] . "\")'>
@@ -211,7 +309,24 @@ if ($_SESSION['role'] != "Admin") {
     </div>
 </div>
 
+<!-- DataTables & Tooltip Init -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script>
+$(function(){
+    $('#laporanKinerjaTable').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
+        },
+        order: [[2,"desc"]]
+    });
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 function showDetail(id_karyawan) {
     // Load detail kinerja karyawan via AJAX
     $.ajax({

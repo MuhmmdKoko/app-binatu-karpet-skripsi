@@ -9,11 +9,24 @@ include "pengaturan/koneksi.php";
 include "../template/header.php";
 
 // --- Helper Notifikasi ---
-function kirim_notifikasi_pelanggan(
-    $id_pelanggan, $pesan, $channel = 'Telegram') {
-    // TODO: Implementasi pengiriman ke Telegram/WhatsApp/SMS
-    // Contoh dummy (anggap selalu sukses)
-    return true;
+require_once __DIR__ . '/../pengaturan/telegram_notif.php';
+require_once __DIR__ . '/../pengaturan/telegram_utils.php';
+function kirim_notifikasi_pelanggan($id_pelanggan, $pesan, $channel = 'Telegram') {
+    global $konek, $TELEGRAM_BOT_TOKEN;
+    if ($channel !== 'Telegram') return false;
+    $q = mysqli_query($konek, "SELECT id_telegram FROM pelanggan WHERE id_pelanggan='$id_pelanggan' LIMIT 1");
+    $row = mysqli_fetch_assoc($q);
+    if (empty($row['id_telegram'])) {
+        error_log("[TELEGRAM] Gagal: id_telegram pelanggan kosong untuk id_pelanggan $id_pelanggan");
+        return false;
+    }
+    $chat_id = $row['id_telegram'];
+    $pesan = trim($pesan);
+    $result = send_telegram_message($TELEGRAM_BOT_TOKEN, $chat_id, $pesan, 'HTML');
+    if (!$result) {
+        error_log("[TELEGRAM] Gagal kirim ke $chat_id oleh utilitas telegram_utils.php");
+    }
+    return $result;
 }
 
 function catat_notifikasi($konek, $id_pesanan, $id_pelanggan, $pesan, $channel = 'Telegram', $tipe = 'Pembayaran') {
@@ -133,6 +146,7 @@ while($log_row = mysqli_fetch_assoc($q_log)) {
                     </form>
                     <?php else: ?>
                         <div class="alert alert-info mt-3">Pembayaran sudah lunas atau pesanan tidak dapat menerima pembayaran saat ini.</div>
+                        <a href="?page=pesanan_detail&id=<?= $id ?>" class="btn btn-secondary">Kembali</a>
                     <?php endif; ?>
                 </div>
             </div>

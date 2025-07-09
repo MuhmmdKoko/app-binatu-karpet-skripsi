@@ -88,16 +88,61 @@ if (!$query_kinerja) {
 }
 ?>
 
-<h6>Detail Kinerja Karyawan</h6>
-<p>
-    <strong>Nama Karyawan:</strong> <?= htmlspecialchars($karyawan['nama_lengkap']) ?><br>
-    <strong>Jabatan:</strong> <?= htmlspecialchars($karyawan['role']) ?><br>
-    <strong>No. Telepon:</strong> <?= htmlspecialchars($karyawan['nomor_telepon_internal']) ?><br>
-    <strong>Periode:</strong> <?= date('d/m/Y', strtotime($tgl_awal)) ?> - <?= date('d/m/Y', strtotime($tgl_akhir)) ?>
-</p>
+<div class="mb-2">
+    <div class="row g-2">
+        <div class="col-md-3 col-6">
+            <div class="card bg-primary text-white mb-2">
+                <div class="card-body p-2 text-center">
+                    <div class="small">Total Pesanan</div>
+                    <div class="fw-bold fs-5"><?= number_format($stats['total_pesanan']) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-success text-white mb-2">
+                <div class="card-body p-2 text-center">
+                    <div class="small">Total Item</div>
+                    <div class="fw-bold fs-5"><?= number_format($stats['total_item']) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card <?= $stats['rata_waktu_pengerjaan'] > $stats['rata_estimasi'] ? 'bg-danger' : 'bg-info' ?> text-white mb-2">
+                <div class="card-body p-2 text-center">
+                    <div class="small">Rata-rata Waktu</div>
+                    <div class="fw-bold fs-5"><?= round($stats['rata_waktu_pengerjaan'], 1) ?> hari</div>
+                    <?php if ($stats['rata_waktu_pengerjaan'] > $stats['rata_estimasi']): ?>
+                        <small class="d-block">(melebihi estimasi <?= round($stats['rata_estimasi'], 1) ?> hari)</small>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card bg-warning text-white mb-2">
+                <div class="card-body p-2 text-center">
+                    <div class="small">Ketepatan Waktu</div>
+                    <div class="fw-bold fs-5"><?= round($stats['ketepatan_waktu']) ?>%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="mb-2">
+        <strong>Nama Karyawan:</strong> <?= htmlspecialchars($karyawan['nama_lengkap']) ?> |
+        <strong>Jabatan:</strong> <?= htmlspecialchars($karyawan['role']) ?> |
+        <strong>No. Telepon:</strong> <?= htmlspecialchars($karyawan['nomor_telepon_internal']) ?> |
+        <strong>Periode:</strong> <?= date('d/m/Y', strtotime($tgl_awal)) ?> - <?= date('d/m/Y', strtotime($tgl_akhir)) ?>
+    </div>
+</div>
+
+<!-- Spinner Loading (hidden by default) -->
+<div id="spinnerDetailKinerja" style="display:none;text-align:center;padding:20px;">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
 
 <div class="table-responsive">
-    <table class="table table-bordered table-hover">
+    <table id="detailKinerjaTable" class="table table-bordered table-hover table-sm">
         <thead>
             <tr>
                 <th>No</th>
@@ -114,24 +159,20 @@ if (!$query_kinerja) {
             <?php
             $no = 1;
             while($data = mysqli_fetch_array($query_kinerja)) {
-                $status_waktu = '';
                 $waktu_pengerjaan = round($data['waktu_pengerjaan'], 1);
                 $estimasi_waktu = round($data['estimasi_waktu'], 1);
-                
+                $badge = '';
                 if ($data['tanggal_selesai_aktual']) {
                     if (strtotime($data['tanggal_selesai_aktual']) <= strtotime($data['tanggal_estimasi_selesai'])) {
-                        $status_waktu = '<span class="text-success">Tepat Waktu</span>';
+                        $badge = '<span class="badge bg-success">Tepat ('.$waktu_pengerjaan.' hari)</span>';
                     } else {
-                        $status_waktu = '<span class="text-danger">Terlambat</span>';
+                        $badge = '<span class="badge bg-danger">Terlambat ('.$waktu_pengerjaan.' hari)</span>';
                     }
-                    $status_waktu .= ' (' . $waktu_pengerjaan . ' hari)';
                 } else {
                     if (time() > strtotime($data['tanggal_estimasi_selesai'])) {
-                        $status_waktu = '<span class="text-danger">Melebihi Estimasi</span>';
-                        $status_waktu .= ' (' . $waktu_pengerjaan . ' hari dari ' . $estimasi_waktu . ' hari)';
+                        $badge = '<span class="badge bg-danger">Melebihi Estimasi ('.$waktu_pengerjaan.' hari dari '.$estimasi_waktu.' hari)</span>';
                     } else {
-                        $status_waktu = '<span class="text-primary">Dalam Proses</span>';
-                        $status_waktu .= ' (' . $waktu_pengerjaan . ' hari dari ' . $estimasi_waktu . ' hari)';
+                        $badge = '<span class="badge bg-info">Dalam Proses ('.$waktu_pengerjaan.' hari dari '.$estimasi_waktu.' hari)</span>';
                     }
                 }
 
@@ -143,7 +184,7 @@ if (!$query_kinerja) {
                 echo "<td>" . htmlspecialchars($data['layanan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['total_item']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['status_pesanan_umum']) . "</td>";
-                echo "<td>" . $status_waktu . "</td>";
+                echo "<td>" . $badge . "</td>";
                 echo "</tr>";
             }
             ?>
@@ -151,40 +192,18 @@ if (!$query_kinerja) {
     </table>
 </div>
 
-<div class="row mt-3">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h6 class="card-title">Total Pesanan</h6>
-                <h4><?= number_format($stats['total_pesanan']) ?></h4>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h6 class="card-title">Total Item</h6>
-                <h4><?= number_format($stats['total_item']) ?></h4>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card <?= $stats['rata_waktu_pengerjaan'] > $stats['rata_estimasi'] ? 'bg-danger' : 'bg-info' ?> text-white">
-            <div class="card-body">
-                <h6 class="card-title">Rata-rata Waktu</h6>
-                <h4><?= round($stats['rata_waktu_pengerjaan'], 1) ?> hari
-                <?php if ($stats['rata_waktu_pengerjaan'] > $stats['rata_estimasi']): ?>
-                    <small class="d-block">(melebihi estimasi <?= round($stats['rata_estimasi'], 1) ?> hari)</small>
-                <?php endif; ?>
-                </h4>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <h6 class="card-title">Ketepatan Waktu</h6>
-                <h4><?= round($stats['ketepatan_waktu']) ?>%</h4>
-            </div>
-        </div>
-    </div> 
+<script>
+    $(document).ready(function() {
+        $('#detailKinerjaTable').DataTable({
+            "paging": true,
+            "lengthChange": true,
+            "searching": true,
+            "ordering": true,
+            "info": true,
+            "autoWidth": false,
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.20/i18n/Indonesian.json"
+            }
+        });
+    });
+</script>

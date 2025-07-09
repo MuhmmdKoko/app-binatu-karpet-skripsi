@@ -80,46 +80,45 @@ if (!$query_waktu) {
     </style>
 </head>
 <body>
-    <div class="header">
-        <h2>CV. KARYA UTAMA</h2>
-        <h3>Laporan Analisis Waktu Pengerjaan</h3>
-        <p>Periode: <?= date('d/m/Y', strtotime($start_date)) ?> - <?= date('d/m/Y', strtotime($end_date)) ?></p>
+    <div class="header" style="text-align:center; margin-bottom:16px;">
+        <h2 style="margin-bottom:2px;">BERKAT LAUNDRY</h2>
+        <!-- <img src="../assets/logo-laundry.png" alt="Logo" style="height:60px;"> -->
+        <div style="font-size:15px; margin-bottom:8px;">Laporan Analisis Waktu Pengerjaan</div>
+        <div style="margin-bottom:2px;">
+            <strong>Periode:</strong> <?= date('d/m/Y', strtotime($start_date)) ?> - <?= date('d/m/Y', strtotime($end_date)) ?>
+        </div>
+        <?php if (!empty($_GET['jenis_layanan'])): ?>
+        <div style="font-size:13px; margin-bottom:2px;"><strong>Layanan:</strong> <?= htmlspecialchars($_GET['jenis_layanan']) ?></div>
+        <?php endif; ?>
     </div>
 
-    <div class="metrics">
-        <?php
-        $total_durasi = 0;
-        $pesanan_tepat_waktu = 0;
-        $temp_data = array();
-        $total_pesanan_selesai = 0;
+    <?php
+    $total_durasi = 0;
+    $pesanan_tepat_waktu = 0;
+    $temp_data = array();
+    $total_pesanan_selesai = 0;
 
-        while($data = mysqli_fetch_array($query_waktu)) {
-            $durasi = $data['durasi_jam'];
-            $temp_data[] = $data;
-            if ($data['tanggal_selesai_aktual']) {
-                if($durasi <= 48) {
-                    $pesanan_tepat_waktu++;
-                }
-                $total_pesanan_selesai++;
-                $total_durasi += $durasi;
+    while($data = mysqli_fetch_array($query_waktu)) {
+        $durasi = $data['durasi_jam'];
+        $temp_data[] = $data;
+        if ($data['tanggal_selesai_aktual']) {
+            if($durasi <= 48) {
+                $pesanan_tepat_waktu++;
             }
+            $total_pesanan_selesai++;
+            $total_durasi += $durasi;
         }
-        $total_pesanan = count($temp_data); // seluruh pesanan, selesai + belum selesai
-        $rata_rata_durasi = $total_pesanan_selesai > 0 ? round($total_durasi / $total_pesanan_selesai, 1) : 0;
-        ?>
-        <div class="metric-box">
-            <h4>Total Pesanan</h4>
-            <h3><?= number_format($total_pesanan) ?></h3>
-        </div>
-        <div class="metric-box">
-            <h4>Rata-rata Durasi</h4>
-            <h3><?= $rata_rata_durasi ?> jam</h3>
-        </div>
-        <div class="metric-box">
-            <h4>Ketepatan Waktu</h4>
-            <h3><?= $total_pesanan > 0 ? round(($pesanan_tepat_waktu / $total_pesanan) * 100) : 0 ?>%</h3>
-        </div>
-    </div>
+    }
+    $total_pesanan = count($temp_data); // seluruh pesanan, selesai + belum selesai
+    $rata_rata_durasi = $total_pesanan_selesai > 0 ? round($total_durasi / $total_pesanan_selesai, 1) : 0;
+    ?>
+    <table class="summary" style="margin-bottom:18px; border:1px solid #bbb; background:#fafcff; border-radius:7px; box-shadow:0 1px 2px #eee; width:60%; margin-left:auto; margin-right:auto;">
+        <tr>
+            <td style="padding:8px 18px; border-right:1px solid #eee;"><strong>Total Pesanan</strong><br><span style="font-size:18px; font-weight:bold; color:#1a7f37;"> <?= number_format($total_pesanan) ?></span></td>
+            <td style="padding:8px 18px; border-right:1px solid #eee;"><strong>Rata-rata Durasi</strong><br><span style="font-size:18px; font-weight:bold; color:#0d6efd;"> <?= $rata_rata_durasi ?> jam</span></td>
+            <td style="padding:8px 18px;"><strong>Ketepatan Waktu</strong><br><span style="font-size:18px; font-weight:bold; color:#f59e00;"> <?= $total_pesanan > 0 ? round(($pesanan_tepat_waktu / $total_pesanan) * 100) : 0 ?>%</span></td>
+        </tr>
+    </table>
 
     <table>
         <thead>
@@ -131,6 +130,7 @@ if (!$query_waktu) {
                 <th>Estimasi Selesai</th>
                 <th>Pelanggan</th>
                 <th>Layanan</th>
+                <th>Durasi (jam)</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -153,6 +153,7 @@ if (!$query_waktu) {
                 echo "<td>" . date('d/m/Y H:i', strtotime($data['tanggal_estimasi_selesai'])) . "</td>";
                 echo "<td>" . htmlspecialchars($data['nama_pelanggan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['layanan']) . "</td>";
+                echo "<td>" . ($data['durasi_jam'] ? $data['durasi_jam'] : '-') . "</td>";
                 echo "<td>" . $tepat_waktu . "</td>";
                 echo "</tr>";
             }
@@ -160,10 +161,34 @@ if (!$query_waktu) {
         </tbody>
     </table>
 
-    <div class="no-print">
+    <div class="no-print" style="margin-top:18px; text-align:center;">
         <button onclick="window.print()">Cetak</button>
         <button onclick="window.close()">Tutup</button>
     </div>
+
+    <div style="width:100%; margin-top:30px; font-size:12px; color:#888; text-align:right;">
+        Dicetak oleh: <?= isset($_SESSION['nama']) ? htmlspecialchars($_SESSION['nama']) : 'Administrator' ?> | Tanggal cetak: <?= date('d/m/Y H:i', strtotime('now')) ?>
+    </div>
+
+    <style>
+    @media print {
+        .no-print { display: none; }
+        body { margin: 0 10mm 0 10mm; }
+        @page { margin: 10mm 10mm 15mm 10mm; }
+        .summary { page-break-inside: avoid; }
+        table { page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        /* Page numbering */
+        body:after {
+            content: "Halaman " counter(page);
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            font-size: 11px;
+            color: #888;
+        }
+    }
+    </style>
 
     <script>
         window.onload = function() {
@@ -171,4 +196,4 @@ if (!$query_waktu) {
         }
     </script>
 </body>
-</html> 
+</html>

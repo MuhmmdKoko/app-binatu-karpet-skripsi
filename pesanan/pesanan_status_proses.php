@@ -6,13 +6,49 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['Admin','Karyawan
     exit;
 }
 include "pengaturan/koneksi.php";
-include "../template/header.php";
+// include "../template/header.php";
 
 // --- Helper Notifikasi ---
+require_once __DIR__ . '/../pengaturan/telegram_notif.php';
+require_once __DIR__ . '/../pengaturan/telegram_utils.php';
 function kirim_notifikasi_pelanggan($id_pelanggan, $pesan, $channel = 'Telegram') {
-    // TODO: Implementasi pengiriman ke Telegram/WhatsApp/SMS
-    // Contoh dummy (anggap selalu sukses)
-    return true;
+    global $konek, $TELEGRAM_BOT_TOKEN;
+    $debug_telegram = true; // Set ke false jika tidak ingin debug
+    if ($channel !== 'Telegram') return false;
+    $q = mysqli_query($konek, "SELECT id_telegram FROM pelanggan WHERE id_pelanggan='$id_pelanggan' LIMIT 1");
+    $row = mysqli_fetch_assoc($q);
+    if (empty($row['id_telegram'])) {
+        error_log("[TELEGRAM] Gagal: id_telegram pelanggan kosong untuk id_pelanggan $id_pelanggan");
+        if ($debug_telegram) {
+            echo "<div style='color:red'>[DEBUG TELEGRAM] id_telegram pelanggan kosong untuk id_pelanggan $id_pelanggan</div>";
+        }
+        return false;
+    }
+    $chat_id = $row['id_telegram'];
+    $pesan = trim($pesan);
+    // Debug sebelum kirim
+    if ($debug_telegram) {
+        echo "<div style='color:blue'>[DEBUG TELEGRAM] Akan mengirim ke chat_id: $chat_id<br>Pesan: " . htmlspecialchars($pesan) . "</div>";
+    }
+    // Kirim dan ambil response
+    ob_start();
+    $result = send_telegram_message($TELEGRAM_BOT_TOKEN, $chat_id, $pesan, 'HTML');
+    $debug_output = ob_get_clean();
+    if (!$result) {
+        error_log("[TELEGRAM] Gagal kirim ke $chat_id oleh utilitas telegram_utils.php");
+        if ($debug_telegram) {
+            echo "<div style='color:red'>[DEBUG TELEGRAM] Gagal kirim ke $chat_id. Cek error_log untuk detail.</div>";
+        }
+    } else {
+        if ($debug_telegram) {
+            echo "<div style='color:green'>[DEBUG TELEGRAM] Berhasil kirim ke $chat_id.</div>";
+        }
+    }
+    // Jika ada output dari send_telegram_message (misal: print_r/echo), tampilkan
+    if ($debug_telegram && !empty($debug_output)) {
+        echo "<pre style='color:gray'>[DEBUG OUTPUT]\n" . htmlspecialchars($debug_output) . "</pre>";
+    }
+    return $result;
 }
 
 function catat_notifikasi($konek, $id_pesanan, $id_pelanggan, $pesan, $channel = 'Telegram', $tipe = 'Status Pesanan') {
@@ -47,6 +83,11 @@ if (isset($_POST['update_status_umum']) && !$is_final_status) {
     // Validasi alur status dari Selesai
     if ($status_sebelumnya == 'Selesai' && in_array($status, ['Baru', 'Diproses', 'Dibatalkan'])) {
         echo '<script>alert("Pesanan yang sudah Selesai hanya bisa diubah menjadi Diambil.");window.location="?page=pesanan_status_proses&id='.$id.'";</script>';
+        exit;
+    }
+    // PATCH: Tidak boleh dari Diproses ke Baru
+    if ($status_sebelumnya == 'Diproses' && $status == 'Baru') {
+        echo '<script>alert("Status Diproses tidak bisa dikembalikan ke Baru.");window.location="?page=pesanan_status_proses&id='.$id.'";</script>';
         exit;
     }
 
@@ -177,8 +218,47 @@ if (isset($_POST['update_status_item']) && !$is_final_status) {
             if (!mysqli_query($konek, $log_item_sql)) {
                 throw new Exception("Gagal mencatat riwayat item: " . mysqli_error($konek));
             }
+            // --- Kirim notifikasi Telegram ke pelanggan ---
+            // Ambil info detail item
+            $q_item = mysqli_query($konek, "SELECT l.nama_layanan, d.deskripsi_item_spesifik FROM detail_pesanan d JOIN layanan l ON d.id_layanan=l.id_layanan WHERE d.id_detail_pesanan=$id_detail LIMIT 1");
+            $item_info = mysqli_fetch_assoc($q_item);
+            $pesan_notif = "Status pesanan Anda untuk layanan <b>".htmlspecialchars($item_info['nama_layanan'])."</b>";
+            if (!empty($item_info['deskripsi_item_spesifik'])) {
+                $pesan_notif .= " (".htmlspecialchars($item_info['deskripsi_item_spesifik']).")";
+            }
+            $pesan_notif .= " kini berstatus <b>".htmlspecialchars($new_status)."</b>.";
+            kirim_notifikasi_pelanggan($row['id_pelanggan'], $pesan_notif, 'Telegram');
         }
 
+        // --- OTOMATISASI STATUS UMUM ---
+        // Cek status semua item (kecuali Dibatalkan)
+        $cek_status_sql = "SELECT status_item_terkini FROM detail_pesanan WHERE id_pesanan = $id AND status_item_terkini != 'Dibatalkan'";
+        $res_status = mysqli_query($konek, $cek_status_sql);
+        $status_array = [];
+        while ($row_status = mysqli_fetch_assoc($res_status)) {
+            $status_array[] = $row_status['status_item_terkini'];
+        }
+        $status_unik = array_unique($status_array);
+        // Jika semua status sama, update status umum
+        if (count($status_unik) === 1 && count($status_array) > 0) {
+            $status_baru_umum = $status_unik[0];
+            if ($row['status_pesanan_umum'] !== $status_baru_umum && $status_baru_umum !== 'Dibatalkan') {
+                $update_umum_sql = "UPDATE pesanan SET status_pesanan_umum = '".mysqli_real_escape_string($konek, $status_baru_umum)."' WHERE id_pesanan = $id";
+                if (!mysqli_query($konek, $update_umum_sql)) {
+                    throw new Exception("Gagal update status umum otomatis: " . mysqli_error($konek));
+                }
+                // Log perubahan status umum otomatis
+                $id_pengguna = $_SESSION['id_pengguna'];
+                $log_umum_sql = "INSERT INTO riwayat_status_pesanan (id_pesanan, status_sebelumnya, status_baru, id_pengguna, waktu_perubahan) VALUES ('$id', '".mysqli_real_escape_string($konek, $row['status_pesanan_umum'])."', '".mysqli_real_escape_string($konek, $status_baru_umum)."', '$id_pengguna', NOW())";
+                if (!mysqli_query($konek, $log_umum_sql)) {
+                    throw new Exception("Gagal mencatat riwayat status umum otomatis: " . mysqli_error($konek));
+                }
+                // Kirim notifikasi Telegram ke pelanggan
+                $id_pelanggan = $row['id_pelanggan'];
+                $pesan_umum = "Status pesanan Anda dengan nomor invoice ".$row['nomor_invoice']." telah berubah menjadi: $status_baru_umum (otomatis).";
+                kirim_notifikasi_pelanggan($id_pelanggan, $pesan_umum, 'Telegram');
+            }
+        }
         mysqli_commit($konek);
         echo '<script>alert("Status item berhasil diperbarui.");window.location="?page=pesanan_status_proses&id='.$id.'";</script>';
         exit;

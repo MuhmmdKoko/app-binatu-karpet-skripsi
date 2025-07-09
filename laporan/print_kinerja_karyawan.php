@@ -135,58 +135,60 @@ if (!$query_kinerja) {
         </p>
     </div>
 
-    <div class="metrics">
-        <?php
-        $total_pesanan = 0;
-        $total_item = 0;
-        $pesanan_tepat_waktu = 0;
-        $total_selesai = 0; // hanya pesanan selesai
-        $temp_data = array();
+    <?php
+    $total_pesanan = 0;
+    $total_item = 0;
+    $pesanan_tepat_waktu = 0;
+    $total_selesai = 0; // hanya pesanan selesai
+    $temp_data = array();
 
-        while($data = mysqli_fetch_array($query_kinerja)) {
-            if (!empty($data['tanggal_selesai'])) {
-                $waktu_selesai = strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk']);
-                $waktu_selesai_jam = round($waktu_selesai / (60 * 60));
-                if($waktu_selesai_jam <= 48) {
-                    $pesanan_tepat_waktu++;
-                }
-                $total_selesai++;
+    while($data = mysqli_fetch_array($query_kinerja)) {
+        if (!empty($data['tanggal_selesai'])) {
+            $waktu_selesai = strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk']);
+            $waktu_selesai_jam = round($waktu_selesai / (60 * 60));
+            if($waktu_selesai_jam <= 48) {
+                $pesanan_tepat_waktu++;
             }
-            $total_pesanan++;
-            $total_item += $data['total_item'];
-            $temp_data[] = $data;
+            $total_selesai++;
         }
-        ?>
-        <div class="metric-box">
-            <h4>Total Pesanan</h4>
-            <h3><?= number_format($total_pesanan) ?></h3>
-        </div>
-        <div class="metric-box">
-            <h4>Total Item</h4>
-            <h3><?= number_format($total_item) ?></h3>
-        </div>
-        <div class="metric-box">
-            <h4>Ketepatan Waktu</h4>
-            <h3><?= $total_selesai > 0 ? round(($pesanan_tepat_waktu / $total_selesai) * 100) : 0 ?>%</h3>
-        </div>
-    </div>
+        $total_pesanan++;
+        $total_item += $data['total_item'];
+        $temp_data[] = $data;
+    }
+    $ketepatan = $total_selesai > 0 ? round(($pesanan_tepat_waktu / $total_selesai) * 100) : 0;
+    ?>
+    <table class="summary" style="margin-bottom:18px; border:1px solid #bbb; background:#fafcff; border-radius:7px; box-shadow:0 1px 2px #eee; width:60%; margin-left:auto; margin-right:auto;">
+        <tr>
+            <td style="padding:8px 18px; border-right:1px solid #eee;"><strong>Total Pesanan</strong><br><span style="font-size:18px; font-weight:bold; color:#1a7f37;"> <?= number_format($total_pesanan) ?></span></td>
+            <td style="padding:8px 18px; border-right:1px solid #eee;"><strong>Total Item</strong><br><span style="font-size:18px; font-weight:bold; color:#0d6efd;"> <?= number_format($total_item) ?></span></td>
+            <td style="padding:8px 18px;"><strong>Ketepatan Waktu</strong><br><span style="font-size:18px; font-weight:bold; color:#f59e00;"> <?= $ketepatan ?>%</span></td>
+        </tr>
+    </table>
 
     <table>
         <thead>
             <tr>
                 <th>No</th>
                 <th>No. Invoice</th>
-                <th>Tanggal</th>
+                <th>Tanggal Masuk</th>
                 <th>Pelanggan</th>
-                <th>Pengguna</th>
+                <th>Karyawan</th>
                 <th>Layanan</th>
                 <th>Jumlah Item</th>
+                <th>Status</th>
+                <th>Waktu Selesai</th>
+                <th>Ketepatan</th>
             </tr>
         </thead>
         <tbody>
             <?php
             $no = 1;
             foreach($temp_data as $data) {
+                $is_selesai = !empty($data['tanggal_selesai']);
+                $waktu_selesai = $is_selesai ? strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk']) : null;
+                $waktu_selesai_jam = $is_selesai ? round($waktu_selesai / (60 * 60)) : null;
+                $tepat_waktu = $is_selesai ? ($waktu_selesai_jam <= 48 ? 'Tepat Waktu' : 'Terlambat') : 'Dalam Proses';
+                $badge = $tepat_waktu === 'Tepat Waktu' ? '<span style="background:#4caf50;color:#fff;padding:2px 8px;border-radius:7px;font-size:12px;">Tepat</span>' : ($tepat_waktu === 'Terlambat' ? '<span style="background:#e53935;color:#fff;padding:2px 8px;border-radius:7px;font-size:12px;">Terlambat</span>' : '<span style="background:#2196f3;color:#fff;padding:2px 8px;border-radius:7px;font-size:12px;">Proses</span>');
                 echo "<tr>";
                 echo "<td>" . $no++ . "</td>";
                 echo "<td>" . htmlspecialchars($data['nomor_invoice']) . "</td>";
@@ -195,16 +197,43 @@ if (!$query_kinerja) {
                 echo "<td>" . htmlspecialchars($data['nama_karyawan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['layanan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['total_item']) . "</td>";
+                echo "<td>" . htmlspecialchars($data['status_pesanan']) . "</td>";
+                echo "<td>" . ($is_selesai ? date('d/m/Y H:i', strtotime($data['tanggal_selesai'])) : '-') . "</td>";
+                echo "<td>" . $badge . "</td>";
                 echo "</tr>";
             }
             ?>
         </tbody>
     </table>
 
-    <div class="no-print">
+    <div class="no-print" style="margin-top:18px; text-align:center;">
         <button onclick="window.print()">Cetak</button>
         <button onclick="window.close()">Tutup</button>
     </div>
+
+    <div style="width:100%; margin-top:30px; font-size:12px; color:#888; text-align:right;">
+        Dicetak oleh: <?= isset($_SESSION['nama']) ? htmlspecialchars($_SESSION['nama']) : 'Administrator' ?> | Tanggal cetak: <?= date('d/m/Y H:i', strtotime('now')) ?>
+    </div>
+
+    <style>
+    @media print {
+        .no-print { display: none; }
+        body { margin: 0 10mm 0 10mm; }
+        @page { margin: 10mm 10mm 15mm 10mm; }
+        .summary { page-break-inside: avoid; }
+        table { page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        /* Page numbering */
+        body:after {
+            content: "Halaman " counter(page);
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            font-size: 11px;
+            color: #888;
+        }
+    }
+    </style>
 
     <script>
         window.onload = function() {

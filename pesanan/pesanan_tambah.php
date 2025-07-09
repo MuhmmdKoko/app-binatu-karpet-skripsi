@@ -13,11 +13,25 @@ include "pengaturan/koneksi.php";
 include "../template/header.php";
 
 // --- Helper Notifikasi ---
+require_once __DIR__ . '/../pengaturan/telegram_utils.php';
 function kirim_notifikasi_pelanggan($id_pelanggan, $pesan, $channel = 'Telegram') {
-    // TODO: Implementasi pengiriman ke Telegram/WhatsApp/SMS
-    // Contoh dummy (anggap selalu sukses)
-    return true;
+    global $konek, $TELEGRAM_BOT_TOKEN;
+    if ($channel !== 'Telegram') return false;
+    $q = mysqli_query($konek, "SELECT id_telegram FROM pelanggan WHERE id_pelanggan='$id_pelanggan' LIMIT 1");
+    $row = mysqli_fetch_assoc($q);
+    if (empty($row['id_telegram'])) {
+        error_log("[TELEGRAM] Gagal: id_telegram pelanggan kosong untuk id_pelanggan $id_pelanggan");
+        return false;
+    }
+    $chat_id = $row['id_telegram'];
+    $pesan = trim($pesan);
+    $result = send_telegram_message($TELEGRAM_BOT_TOKEN, $chat_id, $pesan, 'HTML');
+    if (!$result) {
+        error_log("[TELEGRAM] Gagal kirim ke $chat_id oleh utilitas telegram_utils.php");
+    }
+    return $result;
 }
+
 
 function catat_notifikasi($konek, $id_pesanan, $id_pelanggan, $pesan, $channel = 'Telegram', $tipe = 'Pesanan Baru') {
     $pesan_sql = mysqli_real_escape_string($konek, $pesan);
@@ -86,15 +100,16 @@ if (isset($_POST['submit_pesanan'])) {
     $metode_pembayaran = trim($_POST['metode_pembayaran']);
     $status_pembayaran = trim($_POST['status_pembayaran']);
     $status_pesanan_umum = 'Baru';
-    // Pastikan semua nilai total, diskon, total setelah diskon dalam satuan rupiah penuh (integer)
-    $total_harga_keseluruhan = intval(round(floatval(str_replace(',', '', $_POST['total_harga_keseluruhan']))));
-    $nominal_pembayaran = isset($_POST['nominal_pembayaran']) ? intval(round(floatval($_POST['nominal_pembayaran']))) : 0;
+    // Pastikan semua nilai total, diskon, total setelah diskon dalam satuan rupiah penuh (float)
+    $total_harga_keseluruhan = isset($_POST['total_harga_keseluruhan']) ? floatval($_POST['total_harga_keseluruhan']) : 0;
+    $nominal_pembayaran = isset($_POST['nominal_pembayaran']) ? floatval($_POST['nominal_pembayaran']) : 0;
 
     // Ambil promo jika ada
     $id_promosi = (isset($_POST['id_promosi']) && intval($_POST['id_promosi']) > 0) ? intval($_POST['id_promosi']) : 'NULL';
-    $diskon = isset($_POST['diskon']) ? intval(round(floatval($_POST['diskon']))) : 0;
-    $total_setelah_diskon = isset($_POST['total_setelah_diskon']) ? intval(round(floatval($_POST['total_setelah_diskon']))) : $total_harga_keseluruhan;
-    // Pastikan nilai diskon dan total_setelah_diskon benar dari POST (hasil perhitungan JS)
+    $diskon = isset($_POST['diskon']) ? floatval($_POST['diskon']) : 0;
+    $total_setelah_diskon = isset($_POST['total_setelah_diskon']) ? floatval($_POST['total_setelah_diskon']) : $total_harga_keseluruhan;
+    // Debug log
+    error_log("DEBUG TAMBAH: total_harga_keseluruhan=$total_harga_keseluruhan, diskon=$diskon, total_setelah_diskon=$total_setelah_diskon, POST_total=".$_POST['total_harga_keseluruhan']);
 
     // Simpan ke tabel pesanan
     $sql = "INSERT INTO pesanan (id_pelanggan, id_pengguna_penerima, nomor_invoice, tanggal_masuk, tanggal_estimasi_selesai, total_harga_keseluruhan, status_pesanan_umum, catatan_pesanan, metode_pembayaran, status_pembayaran, nominal_pembayaran, id_promosi, diskon, total_setelah_diskon) VALUES ($id_pelanggan, $id_pengguna_penerima, '$nomor_invoice', '$tanggal_masuk', '$tanggal_estimasi_selesai', $total_harga_keseluruhan, '$status_pesanan_umum', '$catatan_pesanan', '$metode_pembayaran', '$status_pembayaran', $nominal_pembayaran, $id_promosi, $diskon, $total_setelah_diskon)";
@@ -108,8 +123,9 @@ if (isset($_POST['submit_pesanan'])) {
 foreach ($_POST['item'] as $item) {
     $id_layanan = intval($item['id_layanan'] ?? 0);
     $kuantitas = floatval($item['kuantitas'] ?? 0);
-    $harga_saat_pesan = floatval(str_replace(',', '', $item['harga_saat_pesan'] ?? '0'));
-    $subtotal_item = floatval(str_replace(',', '', $item['subtotal_item'] ?? '0'));
+    $harga_saat_pesan = isset($item['harga_saat_pesan']) ? floatval(str_replace(['.',','], ['', '.'], $item['harga_saat_pesan'])) : 0;
+    $subtotal_item = isset($item['subtotal_item']) ? floatval($item['subtotal_item']) : 0;
+    error_log("DEBUG ITEM TAMBAH: id_layanan=$id_layanan, harga_saat_pesan=$harga_saat_pesan, kuantitas=$kuantitas, subtotal_item=$subtotal_item");
     if($id_layanan <= 0) continue;
     $deskripsi = mysqli_real_escape_string($konek, $item['deskripsi_item_spesifik'] ?? '');
     $catatan_item = mysqli_real_escape_string($konek, $item['catatan_item'] ?? '');

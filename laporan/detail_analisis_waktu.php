@@ -69,7 +69,7 @@ $stats = mysqli_fetch_array($query_stats);
 </p>
 
 <div class="table-responsive">
-    <table class="table table-bordered table-hover">
+    <table id="tabelDetailAnalisis" class="table table-bordered table-hover" style="width:100%">
         <thead>
             <tr>
                 <th>No</th>
@@ -147,4 +147,17 @@ $stats = mysqli_fetch_array($query_stats);
             ?>
         </tbody>
     </table>
-</div> 
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(function(){
+    $('#tabelDetailAnalisis').DataTable({
+        language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' },
+        pageLength: 10,
+        lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'Semua']]
+    });
+});
+</script>
