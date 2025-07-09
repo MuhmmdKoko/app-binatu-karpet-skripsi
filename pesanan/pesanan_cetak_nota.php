@@ -76,7 +76,7 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="3" class="text-end"><b>Subtotal</b></td>
+                <td colspan="3" class="text-end"><b>Total Keseluruhan</b></td>
                 <td><b>Rp<?= number_format($row['total_harga_keseluruhan'], 0, ',', '.') ?></b></td>
             </tr>
             <?php if (isset($row['diskon']) && $row['diskon'] > 0) : ?>
@@ -93,6 +93,20 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
                 <td colspan="3" class="text-end">Sudah Dibayar</td>
                 <td>Rp<?= number_format($row['nominal_pembayaran'], 0, ',', '.') ?></td>
             </tr>
+            <?php
+            // Ambil pembayaran terakhir dari log_pembayaran
+            $q_log = mysqli_query($konek, "SELECT * FROM log_pembayaran WHERE id_pesanan = $id ORDER BY tanggal_bayar DESC LIMIT 1");
+            $log_terakhir = mysqli_fetch_assoc($q_log);
+            if ($log_terakhir): ?>
+            <tr>
+                <td colspan="3" class="text-end">Uang Diterima</td>
+                <td>Rp<?= number_format($log_terakhir['uang_diterima'], 0, ',', '.') ?></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-end">Kembalian</td>
+                <td>Rp<?= number_format($log_terakhir['uang_kembalian'], 0, ',', '.') ?></td>
+            </tr>
+            <?php endif; ?>
             <tr>
                 <td colspan="3" class="text-end"><b>Sisa Tagihan</b></td>
                 <td><b>Rp<?= number_format(($row['diskon'] > 0 ? $row['total_setelah_diskon'] : $row['total_harga_keseluruhan']) - $row['nominal_pembayaran'], 0, ',', '.') ?></b></td>
@@ -101,6 +115,13 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
     </table>
     <hr>
     <div><b>Status:</b> <?= htmlspecialchars($row['status_pesanan_umum']) ?> | <b>Pembayaran:</b> <?= htmlspecialchars($row['status_pembayaran']) ?></div>
+    <div class="text-right mt-2" style="color:red; font-size:1.2em; font-weight:bold;">Perhatian</div>
+    <ol style="font-size:12px; margin-left:16px;">
+        <li>Setiap pengambilan barang wajib menggunakan nota.</li>
+        <li>Barang yang tidak diambil lebih dari 1 (satu) bulan bukan menjadi tanggung jawab kami.</li>
+        <li>Benda berharga yang tertinggal didalam cucian apabila hilang atau rusak, bukan menjadi tanggung jawab kami.</li>
+        <li>cucian masuk lebih dari pukul 17:00 akan dihitung masuk ke hari berikutnya.</li>
+    </ol>
     <div class="text-center mt-2">Terima kasih telah menggunakan layanan kami.</div>
 </div>
 </body>

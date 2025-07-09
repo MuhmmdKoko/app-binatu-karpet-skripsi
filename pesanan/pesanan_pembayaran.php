@@ -63,12 +63,12 @@ if(isset($_POST['simpan_pembayaran'])) {
 
         if($tambah <= 0) {
             $err = 'Nominal pembayaran tidak valid.';
-        } elseif($tambah > $sisa) {
-            $err = 'Nominal pembayaran melebihi sisa tagihan. Sisa tagihan adalah Rp'.number_format($sisa,0,',','.');
         } else {
             mysqli_begin_transaction($konek);
             try {
-                $terbayar_baru = $terbayar + $tambah;
+                // Jika pembayaran melebihi sisa tagihan, hanya tambahkan sebesar sisa tagihan
+                $tambah_simpan = ($tambah > $sisa) ? $sisa : $tambah;
+                $terbayar_baru = $terbayar + $tambah_simpan;
                 $status_bayar_baru = ($terbayar_baru >= $total) ? 'Lunas' : 'DP';
                 $id_pengguna = $_SESSION['id_pengguna'];
 
@@ -78,8 +78,11 @@ if(isset($_POST['simpan_pembayaran'])) {
                 mysqli_stmt_execute($stmt1);
 
                 // 2. Insert ke log_pembayaran
-                $stmt2 = mysqli_prepare($konek, "INSERT INTO log_pembayaran (id_pesanan, id_pengguna, jumlah_bayar) VALUES (?, ?, ?)");
-                mysqli_stmt_bind_param($stmt2, 'iid', $id, $id_pengguna, $tambah);
+                $uang_diterima = isset($_POST['uang_diterima']) ? floatval(str_replace('.', '', $_POST['uang_diterima'])) : $tambah;
+                $uang_kembalian = $uang_diterima - $tambah_simpan;
+                if ($uang_kembalian < 0) $uang_kembalian = 0;
+                $stmt2 = mysqli_prepare($konek, "INSERT INTO log_pembayaran (id_pesanan, id_pengguna, jumlah_bayar, uang_diterima, uang_kembalian) VALUES (?, ?, ?, ?, ?)");
+                mysqli_stmt_bind_param($stmt2, 'iiddd', $id, $id_pengguna, $tambah_simpan, $uang_diterima, $uang_kembalian);
                 mysqli_stmt_execute($stmt2);
 
                 // 3. Siapkan data notifikasi ke pelanggan
@@ -139,8 +142,53 @@ while($log_row = mysqli_fetch_assoc($q_log)) {
                     <form method="post">
                         <div class="mb-3">
                             <label class="form-label">Tambah Pembayaran (Rp)</label>
-                            <input type="text" class="form-control" name="tambah_pembayaran" required onkeyup="this.value=formatRupiah(this.value);">
+                            <input type="text" class="form-control" name="tambah_pembayaran" id="inputPembayaran" required onkeyup="this.value=formatRupiah(this.value);">
+<input type="hidden" name="uang_diterima" id="uang_diterima">
+                            <div id="quickNominal" class="mt-2 d-flex flex-wrap gap-2">
+                                <!-- Tombol nominal akan di-generate oleh JS -->
+                            </div>
+                            <div id="notifKembalian" style="display:none; margin-top:8px;"></div>
                         </div>
+                        <script>
+                        (function(){
+                            // Data dari PHP
+                            const SISATAGIHAN = <?= (int)$sisa ?>;
+                            const NOMINALS = [10000,20000,30000,40000,50000,75000,100000,200000,500000];
+                            // Generate tombol
+                            let quickNom = document.getElementById('quickNominal');
+                            let html = '<button type="button" class="btn btn-outline-primary btn-sm" data-nominal="'+SISATAGIHAN+'">Uang Pas</button>';
+                            NOMINALS.forEach(n => {
+                                if(n < SISATAGIHAN) html += '<button type="button" class="btn btn-outline-primary btn-sm" data-nominal="'+n+'">'+n.toLocaleString('id-ID')+'</button>';
+                            });
+                            html += '<button type="button" class="btn btn-outline-primary btn-sm" data-nominal="'+SISATAGIHAN+'">'+SISATAGIHAN.toLocaleString('id-ID')+'</button>';
+                            quickNom.innerHTML = html;
+                            // Event klik tombol
+                            quickNom.querySelectorAll('button').forEach(btn => {
+                                btn.addEventListener('click', function() {
+                                    document.getElementById('inputPembayaran').value = this.dataset.nominal.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                                    hitungKembalian();
+                                });
+                            });
+                            // Event input manual
+                            document.getElementById('inputPembayaran').addEventListener('input', function(){
+    document.getElementById('uang_diterima').value = this.value.replace(/\D/g, '');
+    hitungKembalian();
+});
+                            function hitungKembalian() {
+                                let bayar = parseInt(document.getElementById('inputPembayaran').value.replace(/\D/g, '')) || 0;
+                                let sisa = SISATAGIHAN;
+                                let kembalian = bayar - sisa;
+                                let notif = document.getElementById('notifKembalian');
+                                if (kembalian > 0) {
+                                    notif.style.display = '';
+                                    notif.className = 'alert alert-info py-1 px-2 mb-0';
+                                    notif.innerHTML = 'Kembalian: <b>Rp' + kembalian.toLocaleString('id-ID') + '</b>';
+                                } else {
+                                    notif.style.display = 'none';
+                                }
+                            }
+                        })();
+                        </script>
                         <button type="submit" name="simpan_pembayaran" class="btn btn-success">Simpan</button>
                         <a href="?page=pesanan_detail&id=<?= $id ?>" class="btn btn-secondary">Kembali</a>
                     </form>

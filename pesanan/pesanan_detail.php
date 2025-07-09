@@ -95,7 +95,7 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
             <a href="?page=pesanan_status_proses&id=<?= $id ?>" class="btn btn-warning btn-sm">Status Proses</a>
             <a href="?page=pesanan_read" class="btn btn-secondary btn-sm">Kembali</a>
             <?php if($row['status_pesanan_umum']==='Selesai' && !in_array($row['status_pesanan_umum'], ['Diambil','Dibatalkan'])): ?>
-            <form method="post" style="display:inline; margin-top:10px;">
+            <form method="post" style="display:block; margin-top:10px;">
                 <button name="jadikan_diambil" class="btn btn-success" onclick="return confirm('Jadikan pesanan ini Diambil?')">Jadikan Diambil</button>
             </form>
             <?php endif; ?>
