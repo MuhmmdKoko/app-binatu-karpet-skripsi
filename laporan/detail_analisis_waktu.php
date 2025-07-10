@@ -142,7 +142,9 @@ $stats = mysqli_fetch_array($query_stats);
             }
             
             if (mysqli_num_rows($query) == 0) {
-                echo "<tr><td colspan='8' class='text-center'>Tidak ada data</td></tr>";
+                echo "<tr>";
+                for ($i = 0; $i < 8; $i++) echo '<td class="text-center">-</td>';
+                echo "</tr>";
             }
             ?>
         </tbody>

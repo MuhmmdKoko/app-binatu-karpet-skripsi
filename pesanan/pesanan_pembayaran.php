@@ -57,9 +57,11 @@ if(isset($_POST['simpan_pembayaran'])) {
         $err = 'Pesanan telah dibatalkan/diambil dan tidak bisa menerima pembayaran.';
     } else {
         $tambah = isset($_POST['tambah_pembayaran']) ? floatval(str_replace('.', '', $_POST['tambah_pembayaran'])) : 0;
-        $total = floatval($row['total_harga_keseluruhan']);
+        // Gunakan total setelah diskon jika ada diskon
+        $total = (!empty($row['diskon']) && $row['diskon'] > 0) ? floatval($row['total_setelah_diskon']) : floatval($row['total_harga_keseluruhan']);
         $terbayar = floatval($row['nominal_pembayaran']);
         $sisa = $total - $terbayar;
+        if ($sisa < 0) $sisa = 0;
 
         if($tambah <= 0) {
             $err = 'Nominal pembayaran tidak valid.';
@@ -69,6 +71,7 @@ if(isset($_POST['simpan_pembayaran'])) {
                 // Jika pembayaran melebihi sisa tagihan, hanya tambahkan sebesar sisa tagihan
                 $tambah_simpan = ($tambah > $sisa) ? $sisa : $tambah;
                 $terbayar_baru = $terbayar + $tambah_simpan;
+                if ($terbayar_baru > $total) $terbayar_baru = $total;
                 $status_bayar_baru = ($terbayar_baru >= $total) ? 'Lunas' : 'DP';
                 $id_pengguna = $_SESSION['id_pengguna'];
 
@@ -81,6 +84,8 @@ if(isset($_POST['simpan_pembayaran'])) {
                 $uang_diterima = isset($_POST['uang_diterima']) ? floatval(str_replace('.', '', $_POST['uang_diterima'])) : $tambah;
                 $uang_kembalian = $uang_diterima - $tambah_simpan;
                 if ($uang_kembalian < 0) $uang_kembalian = 0;
+                // Pastikan uang_diterima tidak kosong jika pembayaran dilakukan
+                if ($uang_diterima <= 0) $uang_diterima = $tambah;
                 $stmt2 = mysqli_prepare($konek, "INSERT INTO log_pembayaran (id_pesanan, id_pengguna, jumlah_bayar, uang_diterima, uang_kembalian) VALUES (?, ?, ?, ?, ?)");
                 mysqli_stmt_bind_param($stmt2, 'iiddd', $id, $id_pengguna, $tambah_simpan, $uang_diterima, $uang_kembalian);
                 mysqli_stmt_execute($stmt2);

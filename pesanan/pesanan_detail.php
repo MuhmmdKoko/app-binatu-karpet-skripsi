@@ -89,7 +89,7 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
             <?php if(!in_array($row['status_pesanan_umum'], ['Diambil','Dibatalkan'])): ?>
             <a href="?page=pesanan_edit&id=<?= $id ?>" class="btn btn-primary btn-sm">Edit Pesanan</a>
             <?php endif; ?>
-            <?php if($row['status_pembayaran']!='Lunas' && !in_array($row['status_pesanan_umum'], ['Dibatalkan','Diambil'])): ?>
+            <?php if($row['status_pembayaran']!='' && !in_array($row['status_pesanan_umum'], ['Dibatalkan','Diambil'])): ?>
             <a href="?page=pesanan_pembayaran&id=<?= $id ?>" class="btn btn-success btn-sm">Update Pembayaran</a>
             <?php endif; ?>
             <a href="?page=pesanan_status_proses&id=<?= $id ?>" class="btn btn-warning btn-sm">Status Proses</a>

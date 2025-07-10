@@ -255,8 +255,37 @@ $(function() {
         </div>
     </div>
 </div>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 <style>
     .bg-teal { background-color: #20c997 !important; color: #fff; }
+    /* Paksa ikon sort DataTables agar selalu tampak */
+    th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+      opacity: 1 !important;
+      color: #888 !important;
+      font-size: 1em !important;
+    }
+    /* SVG panah sorting agar selalu tampil di semua tema */
+    table.dataTable thead .sorting:after,
+    table.dataTable thead .sorting_asc:after,
+    table.dataTable thead .sorting_desc:after {
+      content: "" !important;
+      display: inline-block !important;
+      width: 10px;
+      height: 10px;
+      margin-left: 6px;
+      vertical-align: middle;
+      background-repeat: no-repeat;
+      background-size: contain;
+    }
+    table.dataTable thead .sorting:after {
+      background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
+    }
+    table.dataTable thead .sorting_asc:after {
+      background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,7 5,2 10,7" style="fill:%23888;"/></svg>');
+    }
+    table.dataTable thead .sorting_desc:after {
+      background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
+    }
 </style>
 
     <!-- Tabel Data Laporan -->
@@ -338,19 +367,29 @@ $(function() {
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script>
 $(document).ready(function() {
+    // Destroy if already initialized
+    if ($.fn.DataTable.isDataTable('#laporanPromosiTable')) {
+        $('#laporanPromosiTable').DataTable().destroy();
+    }
+    // DataTables initialization
     $('#laporanPromosiTable').DataTable({
-        "language": {
-            "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
         },
-        "pageLength": 10,
-        "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "Semua"] ]
+        pageLength: 10,
+        lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
+        columnDefs: [
+            { orderable: false, targets: [8] }
+        ],
+        order: [[4, 'desc']]
     });
-    // Aktifkan tooltip Bootstrap
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
-
-    // Modal AJAX Detail Promo
-    $(document).on('click', '.btn-detail-promo', function() {
+    // Bootstrap tooltip initialization
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    // Event delegation for detail button click to load modal content via AJAX
+    $('#laporanPromosiTable').on('click', '.btn-detail-promo', function() {
         var id = $(this).data('id');
         $('#modalDetailPromoBody').html('<div class="text-center py-5"><div class="spinner-border text-info"></div><div>Memuat detail...</div></div>');
         var modal = new bootstrap.Modal(document.getElementById('modalDetailPromo'));

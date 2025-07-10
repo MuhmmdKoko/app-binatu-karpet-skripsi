@@ -335,9 +335,14 @@ $(function(){
 </div>
 
 <script>
+var modalDetailWaktu = null;
 function showDetailWaktu(id_layanan) {
-    console.log('showDetailWaktu called', id_layanan);
-    // Load detail analisis waktu via AJAX
+    // Cegah double AJAX jika modal sedang terbuka
+    if (modalDetailWaktu && modalDetailWaktu._isShown) return;
+    $('#detailContent').html('<p class="text-center">Memuat detail ...</p>');
+    if (!modalDetailWaktu) {
+        modalDetailWaktu = new bootstrap.Modal(document.getElementById('detailModal'));
+    }
     $.ajax({
         url: 'laporan/detail_analisis_waktu.php',
         type: 'POST',
@@ -348,10 +353,25 @@ function showDetailWaktu(id_layanan) {
         },
         success: function(response) {
             $('#detailContent').html(response);
-            $('#detailModal').modal('show');
+            modalDetailWaktu.show();
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading detail:', error);
+            $('#detailContent').html('<div class="alert alert-danger">Gagal memuat detail analisis waktu.</div>');
+            modalDetailWaktu.show();
         }
     });
 }
+// Reset konten & tooltip saat modal ditutup
+$('#detailModal').on('hidden.bs.modal', function () {
+    $('#detailContent').html('');
+    // Hapus semua tooltip agar tidak menumpuk
+    $(document.querySelectorAll('.tooltip')).remove();
+    if (modalDetailWaktu) modalDetailWaktu._isShown = false;
+});
+$('#detailModal').on('shown.bs.modal', function () {
+    if (modalDetailWaktu) modalDetailWaktu._isShown = true;
+});
 </script>
 <!-- jQuery (required for AJAX and Bootstrap 4, optional for Bootstrap 5 but needed for your code) -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -366,12 +386,23 @@ function showDetailWaktu(id_layanan) {
 $(document).ready(function() {
     // Initialize DataTables with Indonesian language
     $('#laporanAnalisisTable').DataTable({
-        "language": {
-            "url": "https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
         },
-        "pageLength": 10,
-        "lengthMenu": [ [10, 25, 50, -1], [10, 25, 50, "Semua"] ]
+        pageLength: 10,
+        lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
+        // Nonaktifkan sort pada kolom 'Detail' (kolom ke-8, index 7)
+        columnDefs: [
+            { orderable: false, targets: [7] }
+        ],
+        // Default sort: Total Pesanan (kolom ke-3, index 2) descending
+        order: [[2, 'desc']]
     });
+    // ---
+    // Untuk implementasi di laporan lain:
+    // 1. Pastikan tabel punya id unik, misal id="namaTabelLaporan"
+    // 2. Tambahkan inisialisasi DataTables seperti di atas, ganti id tabel sesuai kebutuhan
+    // 3. Atur columnDefs/targets sesuai posisi kolom aksi/detail pada tabel masing-masing
 
     // Initialize Bootstrap Tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');

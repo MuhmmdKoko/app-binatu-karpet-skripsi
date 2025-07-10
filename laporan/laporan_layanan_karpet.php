@@ -311,6 +311,63 @@ if ($query_stat) {
             </div>
         </div>
     </div>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<style>
+th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+    opacity: 1 !important;
+    color: #6c757d !important;
+    right: 8px !important;
+    font-size: 1em !important;
+}
+</style>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Inisialisasi DataTables hanya sekali
+    $('#layananKarpetTable').DataTable({
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
+        },
+        pageLength: 10,
+        lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
+        columnDefs: [
+            { orderable: false, targets: [9] }
+        ],
+        order: [[2, 'desc']]
+    });
+    // Tooltip Bootstrap 5
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    // Event delegation tombol detail
+    $('#layananKarpetTable').on('click', '.btn-detail', function() {
+        var id_pesanan = $(this).data('id');
+        $('#detailContent').html('<p class="text-center">Memuat detail ...</p>');
+        var modal = new bootstrap.Modal(document.getElementById('detailModal'));
+        modal.show();
+        $.ajax({
+            url: 'laporan/detail_layanan_karpet.php',
+            type: 'POST',
+            data: {
+                id_pesanan: id_pesanan,
+                tgl_awal: '<?= $tgl_awal ?>',
+                tgl_akhir: '<?= $tgl_akhir ?>'
+            },
+            success: function(response) {
+                $('#detailContent').html(response);
+            },
+            error: function() {
+                $('#detailContent').html('<p class="text-center text-danger">Gagal memuat detail. Silakan coba lagi.</p>');
+            }
+        });
+    });
+});
+</script>
+<!-- HAPUS SEMUA SCRIPT INISIALISASI DATATABLES LAINNYA DI BAWAH INI (JIKA ADA) -->
     <?php
     // Hitung total layanan (jumlah baris data)
     $total_layanan = 0;
@@ -332,47 +389,4 @@ if ($query_stat) {
             </div>
         </div>
     </div>
-    <!-- DataTables & Bootstrap 5 JS -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-    <script>
-    $(document).ready(function() {
-        // Inisialisasi DataTables
-        $('#layananKarpetTable').DataTable({
-            language: {
-                url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
-            },
-            pageLength: 10,
-            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'Semua']]
-        });
-        // Inisialisasi tooltip Bootstrap 5
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-            new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-        // Event delegation tombol detail
-        $('#layananKarpetTable').on('click', '.btn-detail', function() {
-            var id_pesanan = $(this).data('id');
-            $('#detailContent').html('<p class="text-center">Memuat detail ...</p>');
-            var modal = new bootstrap.Modal(document.getElementById('detailModal'));
-            modal.show();
-            $.ajax({
-                url: 'laporan/detail_layanan_karpet.php',
-                type: 'POST',
-                data: {
-                    id_pesanan: id_pesanan,
-                    tgl_awal: '<?= $tgl_awal ?>',
-                    tgl_akhir: '<?= $tgl_akhir ?>'
-                },
-                success: function(response) {
-                    $('#detailContent').html(response);
-                },
-                error: function() {
-                    $('#detailContent').html('<p class="text-center text-danger">Gagal memuat detail. Silakan coba lagi.</p>');
-                }
-            });
-        });
-    });
-    </script>
+    

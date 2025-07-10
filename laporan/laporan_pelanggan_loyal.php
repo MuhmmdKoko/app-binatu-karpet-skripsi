@@ -254,6 +254,36 @@ while($row = mysqli_fetch_assoc($tmp_query)) {
             </div>
         </div>
     </div>
+    <!-- DataTables Bootstrap 5 CSS (CDN) & Sorting Icon Fix -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <style>
+      th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+        opacity: 1 !important;
+        color: #888 !important;
+        font-size: 1em !important;
+      }
+      table.dataTable thead .sorting:after,
+      table.dataTable thead .sorting_asc:after,
+      table.dataTable thead .sorting_desc:after {
+        content: "" !important;
+        display: inline-block !important;
+        width: 10px;
+        height: 10px;
+        margin-left: 6px;
+        vertical-align: middle;
+        background-repeat: no-repeat;
+        background-size: contain;
+      }
+      table.dataTable thead .sorting:after {
+        background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
+      }
+      table.dataTable thead .sorting_asc:after {
+        background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,7 5,2 10,7" style="fill:%23888;"/></svg>');
+      }
+      table.dataTable thead .sorting_desc:after {
+        background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
+      }
+    </style>
     <!-- DataTables & Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -261,42 +291,48 @@ while($row = mysqli_fetch_assoc($tmp_query)) {
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script>
     $(document).ready(function() {
-        var detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
-        var detailContent = $('#detailContent');
-        $('#laporanPelangganLoyalTable').DataTable({
-    language: {
-        url: "https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
-    },
-    pageLength: 10,
-    lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, "Semua"] ],
-    responsive: true,
-    ordering: true,
-    searching: true
-});
-// Aktifkan tooltip Bootstrap 5 untuk semua tombol/icon
-document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-    new bootstrap.Tooltip(el);
-});
-// Event delegation untuk tombol detail
-$('tbody').on('click', '.btn-detail', function() {
-    var id_pelanggan = $(this).data('id');
-    detailContent.html('<p class="text-center">Memuat riwayat...</p>');
-    detailModal.show();
-    var terakhir_transaksi = $('input[name="terakhir_transaksi"]').val();
-    $.ajax({
-        url: 'laporan/detail_pelanggan_loyal.php',
-        type: 'POST',
-        data: { 
-            id_pelanggan: id_pelanggan,
-            terakhir_transaksi: terakhir_transaksi
-        },
-        success: function(response) {
-            detailContent.html(response);
-        },
-        error: function() {
-            detailContent.html('<p class="text-center text-danger">Gagal memuat detail. Silakan coba lagi.</p>');
+        // Destroy if already initialized
+        if ($.fn.DataTable.isDataTable('#laporanPelangganLoyalTable')) {
+            $('#laporanPelangganLoyalTable').DataTable().destroy();
         }
-    });
-});
+        // DataTables initialization
+        $('#laporanPelangganLoyalTable').DataTable({
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
+            },
+            pageLength: 10,
+            lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
+            columnDefs: [
+                { orderable: false, targets: [8] }
+            ],
+            order: [[4, 'desc']]
+        });
+        // Bootstrap tooltip initialization
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        // Event delegation for detail button click to load modal content via AJAX
+        $('#laporanPelangganLoyalTable').on('click', '.btn-detail', function() {
+            var id_pelanggan = $(this).data('id');
+            $('#detailContent').html('<p class="text-center">Memuat riwayat...</p>');
+            var modal = new bootstrap.Modal(document.getElementById('detailModal'));
+            modal.show();
+            var terakhir_transaksi = $('input[name="terakhir_transaksi"]').val();
+            $.ajax({
+                url: 'laporan/detail_pelanggan_loyal.php',
+                type: 'POST',
+                data: {
+                    id_pelanggan: id_pelanggan,
+                    terakhir_transaksi: terakhir_transaksi
+                },
+                success: function(response) {
+                    $('#detailContent').html(response);
+                },
+                error: function() {
+                    $('#detailContent').html('<p class="text-center text-danger">Gagal memuat detail. Silakan coba lagi.</p>');
+                }
+            });
+        });
     });
     </script>

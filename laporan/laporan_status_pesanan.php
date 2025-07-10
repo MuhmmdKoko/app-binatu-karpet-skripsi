@@ -208,8 +208,8 @@ $(document).ready(function() {
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0"><i class="ti ti-table"></i> Data Status Pesanan</h5>
             <div>
-                <a href="export_status_pesanan.php?<?php echo http_build_query(['tgl_awal'=>$tgl_awal,'tgl_akhir'=>$tgl_akhir,'status_pesanan'=>$_POST['status_pesanan']??'']); ?>" class="btn btn-success btn-sm me-2" target="_blank" data-bs-toggle="tooltip" title="Export ke Excel"><i class="ti ti-file-spreadsheet"></i> Export Excel</a>
-                <a href="print_status_pesanan.php?<?php echo http_build_query(['tgl_awal'=>$tgl_awal,'tgl_akhir'=>$tgl_akhir,'status_pesanan'=>$_POST['status_pesanan']??'']); ?>" class="btn btn-primary btn-sm" target="_blank" data-bs-toggle="tooltip" title="Cetak Laporan"><i class="ti ti-printer"></i> Print</a>
+                <a href="laporan/export_status_pesanan.php?<?php echo http_build_query(['tgl_awal'=>$tgl_awal,'tgl_akhir'=>$tgl_akhir,'status_pesanan'=>$_POST['status_pesanan']??'']); ?>" class="btn btn-success btn-sm me-2" target="_blank" data-bs-toggle="tooltip" title="Export ke Excel"><i class="ti ti-file-spreadsheet"></i> Export Excel</a>
+                <a href="laporan/print_status_pesanan.php?<?php echo http_build_query(['tgl_awal'=>$tgl_awal,'tgl_akhir'=>$tgl_akhir,'status_pesanan'=>$_POST['status_pesanan']??'']); ?>" class="btn btn-primary btn-sm" target="_blank" data-bs-toggle="tooltip" title="Cetak Laporan"><i class="ti ti-printer"></i> Print</a>
             </div>
         </div>
         <div class="card-body">

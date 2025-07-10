@@ -161,7 +161,7 @@ foreach ($_POST['item'] as $item) {
         if (kirim_notifikasi_pelanggan($id_pelanggan, $pesan_notif, 'Telegram')) {
             catat_notifikasi($konek, $id_pesanan, $id_pelanggan, $pesan_notif, 'Telegram', 'Pesanan Baru');
         }
-        echo '<script>alert("Pesanan berhasil dicatat");window.location="?page=pesanan_read";</script>';
+        echo '<script>alert("Pesanan berhasil dicatat");window.location="?page=pesanan_detail&id=' . $id_pesanan . '";</script>';
         exit;
     } else {
         $err = 'Gagal menyimpan pesanan.';

@@ -240,6 +240,159 @@ $rata_rata_harian = $jumlah_hari > 0 ? ($total_pendapatan / $jumlah_hari) : 0;
             </div>
         </div>
     </div>
+    <!-- DataTables Bootstrap 5 CSS (CDN) & Sorting Icon Fix -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <style>
+      th.sorting:after, th.sorting_asc:after, th.sorting_desc:after {
+        opacity: 1 !important;
+        color: #888 !important;
+        font-size: 1em !important;
+      }
+      table.dataTable thead .sorting:after,
+      table.dataTable thead .sorting_asc:after,
+      table.dataTable thead .sorting_desc:after {
+        content: "" !important;
+        display: inline-block !important;
+        width: 10px;
+        height: 10px;
+        margin-left: 6px;
+        vertical-align: middle;
+        background-repeat: no-repeat;
+        background-size: contain;
+      }
+      table.dataTable thead .sorting:after {
+        background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
+      }
+      table.dataTable thead .sorting_asc:after {
+        background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,7 5,2 10,7" style="fill:%23888;"/></svg>');
+      }
+      table.dataTable thead .sorting_desc:after {
+        background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
+      }
+    </style>
+    <!-- DataTables & Bootstrap JS (include only ONCE) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+    // Utility functions for date formatting
+    function pad(num) { return num < 10 ? '0' + num : num; }
+    function formatDate(date) {
+        return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+    }
+    // If needed globally for inline HTML (e.g. onclick)
+    function showDetail(tanggal) {
+        $.ajax({
+            url: 'laporan/detail_pendapatan.php',
+            type: 'POST',
+            data: {
+                tanggal: tanggal
+            },
+            success: function(response) {
+                $('#detailContent').html(response);
+                var modal = new bootstrap.Modal(document.getElementById('detailModal'));
+                modal.show();
+            },
+            error: function() {
+                $('#detailContent').html('<p class="text-center text-danger">Gagal memuat detail. Silakan coba lagi.</p>');
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        // DataTables initialization (only ONCE)
+        var table = $('#laporanPendapatanTable').DataTable({
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
+            },
+            pageLength: 10,
+            lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
+            responsive: true,
+            ordering: true,
+            searching: true,
+            autoWidth: false,
+            columnDefs: [
+                { orderable: false, targets: [8] }
+            ],
+            order: [[1, 'desc']]
+        });
+        // Tooltips (after draw, for dynamic content)
+        function initTooltips() {
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+                new bootstrap.Tooltip(el);
+            });
+        }
+        initTooltips();
+        table.on('draw', initTooltips);
+
+        // Modal detail via delegated handler (if you use .btn-detail)
+        $('#laporanPendapatanTable').on('click', '.btn-detail', function() {
+            var tanggal = $(this).data('tanggal');
+            showDetail(tanggal);
+        });
+
+        // Filter auto-submit and date preset logic
+        function setTanggalPreset() {
+            const now = new Date();
+            const filter = $('#filter_periode').val();
+            let tgl_awal = '', tgl_akhir = '';
+            if (filter === 'hari') {
+                tgl_awal = tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+            } else if (filter === 'kemarin') {
+                const yesterday = new Date(now);
+                yesterday.setDate(now.getDate()-1);
+                tgl_awal = tgl_akhir = yesterday.getFullYear() + '-' + pad(yesterday.getMonth()+1) + '-' + pad(yesterday.getDate());
+            } else if (filter === 'minggu') {
+                const firstDay = new Date(now);
+                const day = now.getDay();
+                const diff = (day === 0 ? 6 : day - 1);
+                firstDay.setDate(now.getDate() - diff);
+                tgl_awal = firstDay.getFullYear() + '-' + pad(firstDay.getMonth()+1) + '-' + pad(firstDay.getDate());
+                tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+            } else if (filter === 'bulan') {
+                tgl_awal = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-01';
+                tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
+            } else if (filter === '7hari') {
+                const today = new Date();
+                const sevenDaysAgo = new Date();
+                sevenDaysAgo.setDate(today.getDate() - 6);
+                tgl_awal = formatDate(sevenDaysAgo);
+                tgl_akhir = formatDate(today);
+            } else if (filter === 'custom') {
+                return;
+            }
+            if (tgl_awal && tgl_akhir) {
+                $('#tgl_awal').val(tgl_awal);
+                $('#tgl_akhir').val(tgl_akhir);
+            }
+        }
+        $('#filter_periode').on('change', function() {
+            setTanggalPreset();
+            $('#filterForm').submit();
+        });
+        $('#tgl_awal, #tgl_akhir, #status_pembayaran').on('change', function() {
+            $('#filterForm').submit();
+        });
+        // Dynamic table title update
+        const periodeLabels = {
+            hari: "Data Pendapatan Harian",
+            kemarin: "Data Pendapatan Kemarin",
+            '7hari': "Data Pendapatan 7 Hari Terakhir",
+            minggu: "Data Pendapatan Mingguan",
+            bulan: "Data Pendapatan Bulanan",
+            custom: "Data Pendapatan (Custom)"
+        };
+        function updateLaporanPeriodeTitle() {
+            const val = $('#filter_periode').val();
+            const title = periodeLabels[val] || "Data Pendapatan";
+            $('#laporanPeriodeTitle').html('<i class="ti ti-table"></i> ' + title);
+        }
+        $('#filter_periode').on('change', updateLaporanPeriodeTitle);
+        updateLaporanPeriodeTitle();
+    });
+    </script>
 
     <!-- Modal Detail -->
     <div class="modal fade" id="detailModal" tabindex="-1">
@@ -255,99 +408,6 @@ $rata_rata_harian = $jumlah_hari > 0 ? ($total_pendapatan / $jumlah_hari) : 0;
             </div>
         </div>
     </div>
-
-    <!-- DataTables & Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-    <script>
-    // Helper JS
-    function pad2(n) { return n < 10 ? '0' + n : n; }
-    function setTanggalPreset() {
-        const now = new Date();
-        const filter = $('#filter_periode').val();
-        let tgl_awal = '', tgl_akhir = '';
-        if (filter === 'hari') {
-            tgl_awal = tgl_akhir = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate());
-        } else if (filter === 'kemarin') {
-            const yesterday = new Date(now);
-            yesterday.setDate(now.getDate()-1);
-            tgl_awal = tgl_akhir = yesterday.getFullYear() + '-' + pad2(yesterday.getMonth()+1) + '-' + pad2(yesterday.getDate());
-        } else if (filter === 'minggu') {
-            const firstDay = new Date(now);
-            const day = now.getDay();
-            const diff = (day === 0 ? 6 : day - 1);
-            firstDay.setDate(now.getDate() - diff);
-            tgl_awal = firstDay.getFullYear() + '-' + pad2(firstDay.getMonth()+1) + '-' + pad2(firstDay.getDate());
-            tgl_akhir = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate());
-        } else if (filter === 'bulan') {
-            tgl_awal = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-01';
-            tgl_akhir = now.getFullYear() + '-' + pad2(now.getMonth()+1) + '-' + pad2(now.getDate());
-        } else if (filter === 'custom') {
-            return;
-        }
-        if (tgl_awal && tgl_akhir) {
-            $('#tgl_awal').val(tgl_awal);
-            $('#tgl_akhir').val(tgl_akhir);
-        }
-    }
-    $(function() {
-        $('#filter_periode').on('change', function() {
-            setTanggalPreset();
-            $('#filterForm').submit();
-        });
-        $('#tgl_awal, #tgl_akhir, #status_pembayaran').on('change', function() {
-            $('#filterForm').submit();
-        });
-        $('#laporanPendapatanTable').DataTable({
-    language: {
-        url: "https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json"
-    },
-    pageLength: 10,
-    lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, "Semua"] ],
-    responsive: true,
-    ordering: true,
-    searching: true,
-    autoWidth: false,
-    columns: [null, null, null, null, null, null, null, null, null], // 9 kolom
-    createdRow: function(row) {
-        if ($(row).hasClass('dt-empty-row')) {
-            $(row).find('td').attr('colspan', 9);
-        }
-    }
-});
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-            new bootstrap.Tooltip(el);
-        });
-    });
-    function showDetail(tanggal) {
-    $.ajax({
-        url: 'laporan/detail_pendapatan.php',
-        type: 'POST',
-        data: {
-            periode: tanggal,
-            tipe_laporan: 'harian',
-            status_pembayaran: $('select[name="status_pembayaran"]').val(),
-            tgl_awal: $('#tgl_awal').val(),
-            tgl_akhir: $('#tgl_akhir').val()
-        },
-        success: function(response) {
-            $('#detailContent').html(response);
-            var modal = new bootstrap.Modal(document.getElementById('detailModal'));
-            modal.show();
-        },
-        error: function() {
-            $('#detailContent').html('<p class="text-center text-danger">Gagal memuat detail. Silakan coba lagi.</p>');
-        }
-    });
-}
-    </script>
-<script>
-  const periodeLabels = {
-    hari: "Data Pendapatan Harian",
-    kemarin: "Data Pendapatan Kemarin",
-    '7hari': "Data Pendapatan 7 Hari Terakhir",
     minggu: "Data Pendapatan Mingguan",
     bulan: "Data Pendapatan Bulanan",
     custom: "Data Pendapatan (Custom)"

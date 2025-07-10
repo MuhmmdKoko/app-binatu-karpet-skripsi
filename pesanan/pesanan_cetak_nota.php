@@ -94,22 +94,55 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
                 <td>Rp<?= number_format($row['nominal_pembayaran'], 0, ',', '.') ?></td>
             </tr>
             <?php
-            // Ambil pembayaran terakhir dari log_pembayaran
-            $q_log = mysqli_query($konek, "SELECT * FROM log_pembayaran WHERE id_pesanan = $id ORDER BY tanggal_bayar DESC LIMIT 1");
-            $log_terakhir = mysqli_fetch_assoc($q_log);
-            if ($log_terakhir): ?>
+            // Ambil seluruh riwayat pembayaran
+            $q_log = mysqli_query($konek, "SELECT * FROM log_pembayaran WHERE id_pesanan = $id ORDER BY tanggal_bayar ASC");
+            $riwayat_pembayaran = [];
+            $total_bayar = 0;
+            $total_diterima = 0;
+            $total_kembalian = 0;
+            while ($log = mysqli_fetch_assoc($q_log)) {
+                $riwayat_pembayaran[] = $log;
+                $total_bayar += $log['jumlah_bayar'];
+                $total_diterima += $log['uang_diterima'];
+                $total_kembalian += $log['uang_kembalian'];
+            }
+            if (count($riwayat_pembayaran) > 0): ?>
             <tr>
-                <td colspan="3" class="text-end">Uang Diterima</td>
-                <td>Rp<?= number_format($log_terakhir['uang_diterima'], 0, ',', '.') ?></td>
+                <td colspan="4"><b>Rincian Pembayaran:</b></td>
             </tr>
             <tr>
-                <td colspan="3" class="text-end">Kembalian</td>
-                <td>Rp<?= number_format($log_terakhir['uang_kembalian'], 0, ',', '.') ?></td>
+                <td colspan="2" class="text-center"><b>Tanggal</b></td>
+                <td class="text-center"><b>Uang Diterima</b></td>
+                <td class="text-center"><b>Kembalian</b></td>
+            </tr>
+            <?php foreach ($riwayat_pembayaran as $item): ?>
+            <tr>
+                <td colspan="2" class="text-center"><?= date('d-m-Y H:i', strtotime($item['tanggal_bayar'])) ?></td>
+                <td class="text-center">Rp<?= number_format($item['uang_diterima'], 0, ',', '.') ?></td>
+                <td class="text-center">Rp<?= number_format($item['uang_kembalian'], 0, ',', '.') ?></td>
+            </tr>
+            <?php endforeach; ?>
+            <tr>
+                <td colspan="3" class="text-end">Total Sudah Dibayar</td>
+                <td>Rp<?= number_format($total_bayar, 0, ',', '.') ?></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-end">Total Uang Diterima</td>
+                <td>Rp<?= ($total_diterima > 0) ? number_format($total_diterima, 0, ',', '.') : '-' ?></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-end">Total Kembalian</td>
+                <td>Rp<?= ($total_kembalian > 0) ? number_format($total_kembalian, 0, ',', '.') : '-' ?></td>
             </tr>
             <?php endif; ?>
             <tr>
                 <td colspan="3" class="text-end"><b>Sisa Tagihan</b></td>
-                <td><b>Rp<?= number_format(($row['diskon'] > 0 ? $row['total_setelah_diskon'] : $row['total_harga_keseluruhan']) - $row['nominal_pembayaran'], 0, ',', '.') ?></b></td>
+                <?php
+                $total_tagihan = ($row['diskon'] > 0 ? $row['total_setelah_diskon'] : $row['total_harga_keseluruhan']);
+                $sisa_tagihan = $total_tagihan - $row['nominal_pembayaran'];
+                if ($sisa_tagihan < 0) $sisa_tagihan = 0;
+                ?>
+                <td><b>Rp<?= number_format($sisa_tagihan, 0, ',', '.') ?></b></td>
             </tr>
         </tfoot>
     </table>
