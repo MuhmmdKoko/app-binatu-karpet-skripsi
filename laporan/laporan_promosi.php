@@ -151,64 +151,7 @@ $result = $tmp_result;
     </select>
 </div>
 </form>
-<script>
-$(function() {
-    function setTanggalByPeriode(val) {
-        var now = new Date();
-        var yyyy = now.getFullYear();
-        var mm = (now.getMonth()+1).toString().padStart(2,'0');
-        var dd = now.getDate().toString().padStart(2,'0');
-        if(val==='hari') {
-            $('#tanggal_mulai').val(yyyy+'-'+mm+'-'+dd);
-            $('#tanggal_akhir').val(yyyy+'-'+mm+'-'+dd);
-        } else if(val==='kemarin') {
-            var kemarin = new Date(now.getTime() - 86400000);
-            var ky = kemarin.getFullYear();
-            var km = (kemarin.getMonth()+1).toString().padStart(2,'0');
-            var kd = kemarin.getDate().toString().padStart(2,'0');
-            $('#tanggal_mulai').val(ky+'-'+km+'-'+kd);
-            $('#tanggal_akhir').val(ky+'-'+km+'-'+kd);
-        } else if(val==='minggu') {
-            var day = now.getDay()||7;
-            var monday = new Date(now.getTime() - (day-1)*86400000);
-            var sunday = new Date(monday.getTime() + 6*86400000);
-            var my = monday.getFullYear();
-            var mmn = (monday.getMonth()+1).toString().padStart(2,'0');
-            var md = monday.getDate().toString().padStart(2,'0');
-            var sy = sunday.getFullYear();
-            var sm = (sunday.getMonth()+1).toString().padStart(2,'0');
-            var sd = sunday.getDate().toString().padStart(2,'0');
-            $('#tanggal_mulai').val(my+'-'+mmn+'-'+md);
-            $('#tanggal_akhir').val(sy+'-'+sm+'-'+sd);
-        } else if(val==='bulan') {
-            $('#tanggal_mulai').val(yyyy+'-'+mm+'-01');
-            var last = new Date(yyyy, mm, 0).getDate();
-            $('#tanggal_akhir').val(yyyy+'-'+mm+'-'+last);
-        }
-    }
-    $('#periode').on('change', function(){
-        var val = $(this).val();
-        if(val!=='custom') {
-            setTanggalByPeriode(val);
-            $('#tanggal_mulai, #tanggal_akhir').prop('readonly',true);
-        } else {
-            $('#tanggal_mulai, #tanggal_akhir').prop('readonly',false);
-        }
-        $('#filterForm').submit();
-    });
-    $('#tanggal_mulai, #tanggal_akhir').on('change', function(){
-        $('#periode').val('custom');
-        $('#tanggal_mulai, #tanggal_akhir').prop('readonly',false);
-        $('#filterForm').submit();
-    });
-    $('#minimal_penggunaan').on('change', function(){
-        $('#filterForm').submit();
-    });
-    $('#status_promo').on('change', function(){
-        $('#filterForm').submit();
-    });
-});
-</script>
+
         </div>
     </div>
     
@@ -360,35 +303,88 @@ $(function() {
   </div>
 </div>
 
-<!-- DataTables & Bootstrap JS -->
+<!-- JS Libraries -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<!-- Main Script -->
 <script>
 $(document).ready(function() {
-    // Destroy if already initialized
+    // --- HELPER & FILTER LOGIC ---
+    function setTanggalByPeriode(val) {
+        var now = new Date();
+        var yyyy = now.getFullYear();
+        var mm = (now.getMonth() + 1).toString().padStart(2, '0');
+        var dd = now.getDate().toString().padStart(2, '0');
+        if (val === 'hari') {
+            $('#tanggal_mulai').val(yyyy + '-' + mm + '-' + dd);
+            $('#tanggal_akhir').val(yyyy + '-' + mm + '-' + dd);
+        } else if (val === 'kemarin') {
+            var kemarin = new Date(now.getTime() - 86400000);
+            var ky = kemarin.getFullYear();
+            var km = (kemarin.getMonth() + 1).toString().padStart(2, '0');
+            var kd = kemarin.getDate().toString().padStart(2, '0');
+            $('#tanggal_mulai').val(ky + '-' + km + '-' + kd);
+            $('#tanggal_akhir').val(ky + '-' + km + '-' + kd);
+        } else if (val === 'minggu') {
+            var day = now.getDay() || 7;
+            var monday = new Date(now.getTime() - (day - 1) * 86400000);
+            var sunday = new Date(monday.getTime() + 6 * 86400000);
+            var my = monday.getFullYear();
+            var mmn = (monday.getMonth() + 1).toString().padStart(2, '0');
+            var md = monday.getDate().toString().padStart(2, '0');
+            var sy = sunday.getFullYear();
+            var sm = (sunday.getMonth() + 1).toString().padStart(2, '0');
+            var sd = sunday.getDate().toString().padStart(2, '0');
+            $('#tanggal_mulai').val(my + '-' + mmn + '-' + md);
+            $('#tanggal_akhir').val(sy + '-' + sm + '-' + sd);
+        } else if (val === 'bulan') {
+            $('#tanggal_mulai').val(yyyy + '-' + mm + '-01');
+            var last = new Date(yyyy, mm, 0).getDate();
+            $('#tanggal_akhir').val(yyyy + '-' + mm + '-' + last);
+        }
+    }
+
+    $('#periode').on('change', function() {
+        var val = $(this).val();
+        if (val !== 'custom') {
+            setTanggalByPeriode(val);
+            $('#tanggal_mulai, #tanggal_akhir').prop('readonly', true);
+        } else {
+            $('#tanggal_mulai, #tanggal_akhir').prop('readonly', false);
+        }
+        $('#filterForm').submit();
+    });
+
+    $('#tanggal_mulai, #tanggal_akhir, #minimal_penggunaan, #status_promo').on('change', function() {
+        if ($(this).is('#tanggal_mulai, #tanggal_akhir')) {
+             $('#periode').val('custom');
+             $('#tanggal_mulai, #tanggal_akhir').prop('readonly', false);
+        }
+        $('#filterForm').submit();
+    });
+
+    // --- DATA TABLE INITIALIZATION ---
     if ($.fn.DataTable.isDataTable('#laporanPromosiTable')) {
         $('#laporanPromosiTable').DataTable().destroy();
     }
-    // DataTables initialization
     $('#laporanPromosiTable').DataTable({
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
-        },
+        language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' },
         pageLength: 10,
         lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
-        columnDefs: [
-            { orderable: false, targets: [8] }
-        ],
-        order: [[4, 'desc']]
+        columnDefs: [ { orderable: false, targets: [8] } ],
+        order: [[4, 'desc']],
+        drawCallback: function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        }
     });
-    // Bootstrap tooltip initialization
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-        new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    // Event delegation for detail button click to load modal content via AJAX
+
+    // --- MODAL DETAIL LOADER ---
     $('#laporanPromosiTable').on('click', '.btn-detail-promo', function() {
         var id = $(this).data('id');
         $('#modalDetailPromoBody').html('<div class="text-center py-5"><div class="spinner-border text-info"></div><div>Memuat detail...</div></div>');
@@ -397,7 +393,7 @@ $(document).ready(function() {
         $.ajax({
             url: 'laporan/detail_pesanan_promo.php',
             type: 'GET',
-            data: {id_promosi: id, ajax: 1},
+            data: { id_promosi: id, ajax: 1 },
             success: function(res) {
                 $('#modalDetailPromoBody').html(res);
             },

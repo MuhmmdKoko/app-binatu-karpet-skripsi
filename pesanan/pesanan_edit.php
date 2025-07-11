@@ -41,6 +41,7 @@ if (!$kode_promo_pesanan && !empty($rowPes['id_promosi'])) {
     }
 }
 if(isset($_POST['submit_edit'])){
+    try {
     // Ambil data dari form
     $catatan_pesanan = mysqli_real_escape_string($konek, trim($_POST['catatan_pesanan']));
     $items = $_POST['item'] ?? [];
@@ -83,7 +84,6 @@ if(isset($_POST['submit_edit'])){
     // Mulai transaksi database untuk memastikan konsistensi data
     mysqli_begin_transaction($konek);
 
-    try {
         // Ambil total harga keseluruhan dari POST tanpa str_replace
         $total_harga_baru = isset($_POST['total_harga_keseluruhan']) ? floatval($_POST['total_harga_keseluruhan']) : 0;
         error_log("DEBUG FINAL: total_harga_baru=$total_harga_baru, POST=".$_POST['total_harga_keseluruhan']);
@@ -123,38 +123,47 @@ if(isset($_POST['submit_edit'])){
         foreach($items as $it){
             $id_layanan = intval($it['id_layanan'] ?? 0);
             if($id_layanan == 0) continue;
-            // Pastikan harga satuan dan subtotal dalam ribuan penuh (misal: 18000 untuk Rp18.000)
             $harga_saat_pesan = isset($it['harga_saat_pesan']) ? floatval(str_replace(['.',','], ['', '.'], $it['harga_saat_pesan'])) : 0;
             $kuantitas = isset($it['kuantitas']) ? floatval(str_replace(',', '.', $it['kuantitas'])) : 0;
-            $subtotal_item = $harga_saat_pesan * $kuantitas;
-            error_log("DEBUG ITEM: id_layanan=$id_layanan, harga_saat_pesan=$harga_saat_pesan, kuantitas=$kuantitas, subtotal_item=$subtotal_item");
-
-
-            $deskripsi = mysqli_real_escape_string($konek, $it['deskripsi_item_spesifik'] ?? '');
-            $qty = floatval($it['kuantitas'] ?? 0);
-            $harga = isset($it['harga_saat_pesan']) ? floatval(str_replace(['.',','], ['', '.'], $it['harga_saat_pesan'])) : 0;
-            $subtotal = $subtotal_item;
-            $cat_item = mysqli_real_escape_string($konek, $it['catatan_item'] ?? '');
+            $catatan_item = $it['catatan_item'] ?? '';
             $panjang_karpet = isset($it['panjang_karpet']) ? floatval($it['panjang_karpet']) : 0;
             $lebar_karpet = isset($it['lebar_karpet']) ? floatval($it['lebar_karpet']) : 0;
-            // Ambil satuan layanan dari array $layanan
+            $deskripsi = mysqli_real_escape_string($konek, $it['deskripsi_item_spesifik'] ?? '');
+            $cat_item = mysqli_real_escape_string($konek, $catatan_item ?? ($it['catatan_item'] ?? ''));
+            // Ambil satuan layanan dan minimal order
             $satuan_layanan = '';
+            $minimal_aktif = false;
+            $minimal_qty = 0;
             foreach ($layanan as $l) {
                 if ($l['id_layanan'] == $id_layanan) {
                     $satuan_layanan = strtolower(trim($l['satuan']));
+                    $minimal_aktif = ($l['minimal_order_aktif'] == 1 || $l['minimal_order_aktif'] === true || $l['minimal_order_aktif'] === '1');
+                    $minimal_qty = floatval($l['minimal_order_kuantitas']);
                     break;
                 }
             }
+            // Logic identik tambah pesanan
             if ($satuan_layanan === 'm2' || $satuan_layanan === 'm²') {
                 if ($panjang_karpet <= 0 || $lebar_karpet <= 0) {
                     throw new Exception('Panjang dan lebar karpet wajib diisi dan > 0 untuk layanan karpet.');
                 }
                 $qty = $panjang_karpet * $lebar_karpet;
+                if($minimal_aktif && $minimal_qty > 0 && $qty > 0 && $qty < $minimal_qty) {
+                    $qty = $minimal_qty;
+                    $cat_item .= ($cat_item ? ' ' : '') . '[Subtotal dihitung minimal order: ' . $minimal_qty . ']';
+                }
+                $kuantitas = $qty;
+                $subtotal_item = $harga_saat_pesan * $qty;
             } else {
-                $panjang_karpet = null;
-                $lebar_karpet = null;
+                $qty = $kuantitas;
+                if($minimal_aktif && $minimal_qty > 0 && $qty > 0 && $qty < $minimal_qty) {
+                    $qty = $minimal_qty;
+                    $cat_item .= ($cat_item ? ' ' : '') . '[Subtotal dihitung minimal order: ' . $minimal_qty . ']';
+                }
+                $kuantitas = $qty;
+                $subtotal_item = $harga_saat_pesan * $qty;
             }
-            $sql_insert_detail = "INSERT INTO detail_pesanan (id_pesanan, id_layanan, deskripsi_item_spesifik, kuantitas, harga_saat_pesan, subtotal_item, catatan_item, status_item_terkini, panjang_karpet, lebar_karpet) VALUES ($id, $id_layanan, '$deskripsi', $qty, $harga, $subtotal, '$cat_item', 'Diterima', ".($panjang_karpet!==null?$panjang_karpet:'NULL').", ".($lebar_karpet!==null?$lebar_karpet:'NULL').")";
+            $sql_insert_detail = "INSERT INTO detail_pesanan (id_pesanan, id_layanan, deskripsi_item_spesifik, kuantitas, harga_saat_pesan, subtotal_item, catatan_item, status_item_terkini, panjang_karpet, lebar_karpet) VALUES ($id, $id_layanan, '$deskripsi', $qty, $harga_saat_pesan, $subtotal_item, '$cat_item', 'Diterima', ".($panjang_karpet!==null?$panjang_karpet:'NULL').", ".($lebar_karpet!==null?$lebar_karpet:'NULL').")";
             if (!mysqli_query($konek, $sql_insert_detail)) {
                 throw new Exception("Gagal menyimpan item detail pesanan: " . mysqli_error($konek));
             }
@@ -164,7 +173,6 @@ if(isset($_POST['submit_edit'])){
         mysqli_commit($konek);
         echo '<script>alert("Pesanan berhasil diperbarui");window.location="?page=pesanan_detail&id='.$id.'";</script>';
         exit;
-
     } catch (Exception $e) {
         // Jika terjadi error di salah satu query, batalkan semua perubahan
         mysqli_rollback($konek);
@@ -218,7 +226,10 @@ if(isset($_POST['submit_edit'])){
                                 }
                                 $isKarpet = ($satuan_layanan === 'm2' || $satuan_layanan === 'm²');
                                 ?>
-                                <div class="karpet-group" style="<?= $isKarpet ? '' : 'display:none;' ?>;max-width:120px;margin:auto;">
+                                <div class="qty-standard-wrapper" style="<?= ($isKarpet ? 'display:none' : 'display:block') ?>;">
+                                    <input type="number" step="0.01" min="0" class="form-control qty-item-standard" name="item[<?= $idx ?>][kuantitas]" value="<?= $det['kuantitas'] ?>" <?= $isKarpet ? 'readonly' : '' ?> required>
+                                </div>
+                                <div class="qty-m2-wrapper" style="display:<?= ($isKarpet ? 'block' : 'none') ?>;max-width:120px;margin:auto;">
                                     <div class="text-center small" style="margin-bottom:2px;">Panjang (m)</div>
                                     <input type="number" step="0.01" min="0" class="form-control panjang-item mb-1 text-center" name="item[<?= $idx ?>][panjang_karpet]" value="<?= htmlspecialchars($det['panjang_karpet'] ?? '') ?>" placeholder="Panjang">
                                     <div class="text-center" style="font-size:18px;font-weight:bold;">×</div>
@@ -227,9 +238,6 @@ if(isset($_POST['submit_edit'])){
                                     <div class="text-center" style="font-size:20px;font-weight:bold;">=</div>
                                     <div class="text-center small" style="margin-bottom:2px;">Luas (m²)</div>
                                     <input type="text" class="form-control qty-item qty-item-standard text-center" style="font-size:18px;font-weight:bold;background:#f8f9fa;" name="item[<?= $idx ?>][kuantitas]" value="<?= $det['kuantitas'] ?>" readonly placeholder="m²">
-                                </div>
-                                <div class="qty-standar-group" style="<?= !$isKarpet ? '' : 'display:none;' ?>">
-                                    <input type="number" step="0.01" min="0" class="form-control qty-item qty-item-standard" name="item[<?= $idx ?>][kuantitas]" value="<?= $det['kuantitas'] ?>" required>
                                 </div>
                                 </td>
                                 <td><input type="text" class="form-control harga-item" name="item[<?= $idx ?>][harga_saat_pesan]" value="<?= str_replace([',','.'], '', $det['harga_saat_pesan']) ?>" readonly></td>
@@ -264,6 +272,66 @@ if(isset($_POST['submit_edit'])){
     </button>
 </div>
 <script>
+// --- Logic JS identik dengan tambah pesanan ---
+function updateItemRowEdit(tr) {
+    var selectedOption = tr.find('.select-layanan').find(':selected');
+    var satuan = (selectedOption.data('satuan') || '').toLowerCase();
+    var harga = parseFloat(selectedOption.data('harga')) || 0;
+    if (satuan === 'm2' || satuan === 'm²') {
+        tr.find('.qty-standard-wrapper').hide();
+        tr.find('.qty-m2-wrapper').show();
+        tr.find('.panjang-item').prop('readonly', false).show();
+        tr.find('.lebar-item').prop('readonly', false).show();
+        tr.find('.qty-item-standard').prop('readonly', true);
+        var panjang = parseFloat(tr.find('.panjang-item').val()) || 0;
+        var lebar = parseFloat(tr.find('.lebar-item').val()) || 0;
+        var qty = panjang * lebar;
+        tr.find('.qty-item-standard').val(qty > 0 ? qty.toFixed(2) : '');
+    } else {
+        tr.find('.qty-standard-wrapper').show();
+        tr.find('.qty-m2-wrapper').hide();
+        tr.find('.panjang-item').val('').hide();
+        tr.find('.lebar-item').val('').hide();
+        tr.find('.qty-item-standard').prop('readonly', false);
+        var qty = parseFloat(tr.find('.qty-item-standard').val()) || 0;
+    }
+    var minimalAktif = selectedOption.data('minimal-aktif') == 1 || selectedOption.data('minimal-aktif') === true || selectedOption.data('minimal-aktif') === '1';
+    var minimalQty = parseFloat(selectedOption.data('minimal-qty')) || 0;
+    var showMinimalNote = false;
+    var usedQty = qty;
+    if(minimalAktif && minimalQty > 0 && qty > 0 && qty < minimalQty) {
+        usedQty = minimalQty;
+        showMinimalNote = true;
+    }
+    var subtotal = harga * usedQty;
+    tr.find('.harga-item').val(harga > 0 ? harga.toLocaleString('id-ID') : '');
+    tr.find('.subtotal-item').val(subtotal > 0 ? subtotal.toFixed(2) : '');
+    tr.find('.minimal-order-note').remove();
+    if(showMinimalNote) {
+        tr.find('.subtotal-item').after('<div class="minimal-order-note text-warning small">Subtotal dihitung minimal order: '+minimalQty+'</div>');
+    }
+    hitungTotalEdit();
+}
+function hitungTotalEdit() {
+    var total = 0;
+    $('#tabelItem tbody tr').each(function(){
+        var subtotal = parseFloat($(this).find('.subtotal-item').val().replace(/[^0-9.,]/g,'').replace(',','.')) || 0;
+        total += subtotal;
+    });
+    $('#total_harga_keseluruhan').val(total.toFixed(2));
+    $('#display_total_akhir').text(total.toLocaleString('id-ID'));
+    $('#total_setelah_diskon').val(total.toFixed(2));
+}
+// Event handler untuk semua perubahan input
+$('#tabelItem').on('change input', '.select-layanan, .qty-item-standard, .panjang-item, .lebar-item', function(e) {
+    var tr = $(this).closest('tr');
+    updateItemRowEdit(tr);
+});
+$('#tabelItem').on('click', '.btnHapusItem', function(){
+    $(this).closest('tr').remove();
+    hitungTotalEdit();
+});
+// --- Promo, diskon, dan validasi ---
 $(function(){
     // Fetch promo list
     $.get('pesanan/promo_dropdown_fetch.php', {kode_promo_pesanan: '<?= addslashes($kode_promo_pesanan) ?>'}, function(list) {
@@ -277,71 +345,29 @@ $(function(){
             var opt = $('<option>').val((p.kode_promo||'').toLowerCase()).text(label);
             if(p.status !== 'aktif') opt.prop('disabled',true);
             if(p.kode_promo && p.kode_promo.toLowerCase() === currentKode && currentKode) {
-                opt.prop('selected',true);
                 found = true;
+                opt.prop('selected',true);
             }
             dropdown.append(opt);
         });
-        if(currentKode) {
-            if(found) {
-                dropdown.val(currentKode).trigger('change');
-                $('#kode_promo').hide();
-            } else {
-                dropdown.val('__manual__').trigger('change');
-                $('#kode_promo').val(currentKode).show();
-            }
-        } else {
-            dropdown.val('');
-            $('#kode_promo').hide();
+        if(!found && currentKode) {
+            dropdown.append($('<option>').val(currentKode).text('Promo Tidak Terdaftar').prop('selected',true).prop('disabled',true));
         }
     },'json');
-    // On change dropdown
+    // Handle dropdown selection change
     $('#dropdown_promo').on('change', function(){
         var val = $(this).val();
         if(val === '__manual__') {
             $('#kode_promo').val('').show().focus();
+            resetPromoEdit();
         } else if(val) {
             $('#kode_promo').val(val).hide();
-            // Otomatis cek promo
-            var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
-            $('#btnCekPromo').prop('disabled', true);
-            $('#promoSpinner').removeClass('d-none');
-            $.post('pesanan/promo_cek.php', {kode: val, total: total}, function(res) {
-                if (res.status === 'ok') {
-                    $('#promo_info').html('<span class="badge bg-success">'+res.msg+'</span>').removeClass('text-danger').addClass('text-success');
-                    $('#id_promosi').val(res.id_promosi);
-                    $('#diskon').val(res.diskon);
-                    $('#display_diskon').text(parseInt(res.diskon).toLocaleString('id-ID'));
-                    $('#ringkasan_diskon').show();
-                    var totalAkhir = Math.max(0, total - res.diskon);
-                    $('#total_display').val(totalAkhir.toLocaleString('id-ID'));
-                    $('#total_setelah_diskon').val(totalAkhir);
-                } else {
-                    $('#promo_info').html('<span class="badge bg-danger">'+res.msg+'</span>').removeClass('text-success').addClass('text-danger');
-                    $('#id_promosi').val('');
-                    $('#diskon').val('');
-                    $('#display_diskon').text('0');
-                    $('#ringkasan_diskon').hide();
-                    $('#total_display').val(total.toLocaleString('id-ID'));
-                    $('#total_setelah_diskon').val(total);
-                }
-            }, 'json').always(function() {
-                $('#btnCekPromo').prop('disabled', false);
-                $('#promoSpinner').addClass('d-none');
-            });
+            $('#btnCekPromo').trigger('click');
         } else {
             $('#kode_promo').val('').hide();
-            $('#promo_info').text('');
-            $('#id_promosi').val('');
-            $('#diskon').val('');
-            $('#display_diskon').text('0');
-            $('#ringkasan_diskon').hide();
-            var total = parseInt($('#total_harga_keseluruhan').val()) || 0;
-            $('#total_display').val(total.toLocaleString('id-ID'));
-            $('#total_setelah_diskon').val(total);
+            resetPromoEdit();
         }
     });
-    // Jika input manual diubah, dropdown ikut ke manual
     $('#kode_promo').on('input', function(){
         $('#dropdown_promo').val('__manual__');
     });
@@ -376,27 +402,54 @@ $(function(){
 var layanan = <?= json_encode($layanan) ?>;
 function renderLayananOptions(){
  let html='';
- layanan.forEach(l=>{html+='<option value="'+l.id_layanan+'" data-harga="'+l.harga_per_unit+'" data-estimasi="'+l.estimasi_waktu_hari+'">'+l.nama_layanan+' (Rp'+parseInt(l.harga_per_unit).toLocaleString()+'/'+l.satuan+')</option>';});
+ layanan.forEach(l=>{
+   html+='<option value="'+l.id_layanan+'" data-harga="'+l.harga_per_unit+'" data-estimasi="'+l.estimasi_waktu_hari+'" data-minimal-aktif="'+l.minimal_order_aktif+'" data-minimal-qty="'+l.minimal_order_kuantitas+'" data-satuan="'+l.satuan+'">'+l.nama_layanan+' (Rp'+parseInt(l.harga_per_unit).toLocaleString()+'/'+l.satuan+')</option>';
+ });
  return html;
 }
 if(typeof window.itemIndex === 'undefined'){window.itemIndex = $('#tabelItem tbody tr').length;}
-$('#btnTambahItem').on('click',function(){
-    var idx = window.itemIndex;
-    var row='<tr>'+ 
-        '<td><select class="form-control select-layanan" name="item['+idx+'][id_layanan]">'+renderLayananOptions()+'</select></td>'+ 
-        '<td><input type="text" name="item['+idx+'][deskripsi_item_spesifik]" class="form-control" required></td>'+ 
-        '<td><input type="number" step="0.01" min="0" name="item['+idx+'][kuantitas]" class="form-control qty-item-standard" required></td>'+ 
-        '<td><input type="text" name="item['+idx+'][harga_saat_pesan]" class="form-control harga-item" readonly></td>'+ 
-        '<td><input type="text" name="item['+idx+'][subtotal_item]" class="form-control subtotal-item" readonly></td>'+ 
-        '<td><input type="text" name="item['+idx+'][catatan_item]" class="form-control"></td>'+ 
+$('#btnTambahItem').on('click', function(){
+    var layananOptions = renderLayananOptions();
+    var row = '<tr>'+
+        '<td>'+
+            '<select class="form-control select-layanan" name="item['+window.itemIndex+'][id_layanan]" required>'+
+                '<option value="">- Pilih Layanan -</option>' + layananOptions +
+            '</select>'+
+        '</td>'+
+        '<td><input type="text" class="form-control" name="item['+window.itemIndex+'][deskripsi_item_spesifik]" required></td>'+
+        '<td class="qty-cell">'+
+            '<div class="qty-standard-wrapper">'+
+                '<input type="number" step="0.01" min="0" class="form-control qty-item-standard" name="item['+window.itemIndex+'][kuantitas]" required>'+
+            '</div>'+ 
+            '<div class="qty-m2-wrapper" style="display:none;max-width:120px;margin:auto;">'+
+                '<div class="text-center small" style="margin-bottom:2px;">Panjang (m)</div>'+ 
+                '<input type="number" step="0.01" min="0" class="form-control panjang-item mb-1 text-center" name="item['+window.itemIndex+'][panjang_karpet]" placeholder="Panjang">'+ 
+                '<div class="text-center" style="font-size:18px;font-weight:bold;">×</div>'+ 
+                '<div class="text-center small" style="margin-bottom:2px;">Lebar (m)</div>'+ 
+                '<input type="number" step="0.01" min="0" class="form-control lebar-item mt-1 text-center" name="item['+window.itemIndex+'][lebar_karpet]" placeholder="Lebar">'+ 
+                '<div class="text-center" style="font-size:20px;font-weight:bold;">=</div>'+ 
+                '<div class="text-center small" style="margin-bottom:2px;">Luas (m²)</div>'+ 
+                '<input type="text" class="form-control qty-item qty-item-standard text-center" style="font-size:18px;font-weight:bold;background:#f8f9fa;" name="item['+window.itemIndex+'][kuantitas]" readonly placeholder="m²">'+ 
+            '</div>'+ 
+        '</td>'+ 
+        '<td><input type="text" class="form-control harga-item" name="item['+window.itemIndex+'][harga_saat_pesan]" readonly></td>'+ 
+        '<td><input type="text" class="form-control subtotal-item" name="item['+window.itemIndex+'][subtotal_item]" readonly></td>'+ 
+        '<td><input type="text" class="form-control" name="item['+window.itemIndex+'][catatan_item]"></td>'+ 
         '<td><button type="button" class="btn btn-danger btn-sm btnHapusItem">Hapus</button></td>'+ 
-        '<input type="hidden" name="item['+idx+'][estimasi_hari]" value="0">'+ 
+        '<input type="hidden" name="item['+window.itemIndex+'][estimasi_hari]" value="0">'+ 
     '</tr>';
-    var $row = $(row);
-    $('#tabelItem tbody').append($row);
+    $('#tabelItem tbody').append(row);
     window.itemIndex++;
-    // Trigger update untuk inisialisasi harga & subtotal
-    $row.find('.select-layanan').trigger('change');
+});
+// Event handler untuk semua perubahan input
+$('#tabelItem').on('change input', '.select-layanan, .qty-item-standard, .panjang-item, .lebar-item', function(e) {
+    var tr = $(this).closest('tr');
+    updateItemRowEdit(tr);
+});
+// Hapus item
+$('#tabelItem').on('click', '.btnHapusItem', function(){
+    $(this).closest('tr').remove();
+    hitungTotal();
 });
 $('#tabelItem').on('click','.btnHapusItem',function(){ $(this).closest('tr').remove();hitungTotal();updatePromoTotal();});
 function hitungTotal(){
@@ -521,37 +574,47 @@ function updateItemRowEdit(tr) {
     var selectedOption = tr.find('.select-layanan').find(':selected');
     var satuan = (selectedOption.data('satuan') || '').toLowerCase();
     var harga = parseFloat(selectedOption.data('harga')) || 0;
+    var minimalAktif = selectedOption.data('minimal-aktif') == 1 || selectedOption.data('minimal-aktif') === true || selectedOption.data('minimal-aktif') === '1';
+    var minimalQty = parseFloat(selectedOption.data('minimal-qty')) || 0;
+    var showMinimalNote = false;
+    var usedQty = 0;
     if (satuan === 'm2' || satuan === 'm²') {
-        tr.find('.panjang-item').show();
-        tr.find('.lebar-item').show();
+        tr.find('.qty-standard-wrapper').hide();
+        tr.find('.qty-m2-wrapper').show();
+        tr.find('.panjang-item').prop('readonly', false).show();
+        tr.find('.lebar-item').prop('readonly', false).show();
         tr.find('.qty-item-standard').prop('readonly', true);
         var panjang = parseFloat(tr.find('.panjang-item').val()) || 0;
         var lebar = parseFloat(tr.find('.lebar-item').val()) || 0;
         var qty = panjang * lebar;
+        usedQty = qty;
+        if(minimalAktif && minimalQty > 0 && qty > 0 && qty < minimalQty) {
+            usedQty = minimalQty;
+            showMinimalNote = true;
+        }
         tr.find('.qty-item-standard').val(qty > 0 ? qty.toFixed(2) : '');
-        tr.find('.harga-item').val(harga > 0 ? harga.toLocaleString('id-ID') : '');
-        var subtotal = harga * qty;
-        tr.find('.subtotal-item').val(subtotal > 0 ? subtotal.toFixed(2) : '');
     } else {
-        tr.find('.panjang-item').hide();
-        tr.find('.lebar-item').hide();
-        tr.find('.panjang-item').val('');
-        tr.find('.lebar-item').val('');
+        tr.find('.qty-standard-wrapper').show();
+        tr.find('.qty-m2-wrapper').hide();
+        tr.find('.panjang-item').val('').hide();
+        tr.find('.lebar-item').val('').hide();
         tr.find('.qty-item-standard').prop('readonly', false);
         var qty = parseFloat(tr.find('.qty-item-standard').val()) || 0;
-        tr.find('.harga-item').val(harga > 0 ? harga.toLocaleString('id-ID') : '');
-        var subtotal = harga * qty;
-        tr.find('.subtotal-item').val(subtotal > 0 ? subtotal.toFixed(2) : '');
+        usedQty = qty;
+        if(minimalAktif && minimalQty > 0 && qty > 0 && qty < minimalQty) {
+            usedQty = minimalQty;
+            showMinimalNote = true;
+        }
+    }
+    var subtotal = harga * usedQty;
+    tr.find('.harga-item').val(harga > 0 ? harga.toLocaleString('id-ID') : '');
+    tr.find('.subtotal-item').val(subtotal > 0 ? subtotal.toFixed(2) : '');
+    tr.find('.minimal-order-note').remove();
+    if(showMinimalNote) {
+        tr.find('.subtotal-item').after('<div class="minimal-order-note text-warning small">Subtotal dihitung minimal order: '+minimalQty+'</div>');
     }
     hitungTotal();
 }
-
-// On page load, show/hide panjang/lebar fields correctly for each row
-$(document).ready(function() {
-    $('#tabelItem tbody tr').each(function() {
-        updateItemRowEdit($(this));
-    });
-});
 $('#tabelItem').on('change input', '.select-layanan', function(e) {
     var tr = $(this).closest('tr');
     updateItemRowEdit(tr);
@@ -599,4 +662,3 @@ $('#formEdit').on('submit',function(){
   }
 });
 </script>
-

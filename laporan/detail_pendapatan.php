@@ -85,8 +85,13 @@ switch($tipe_laporan) {
                 echo "<td>" . date('d/m/Y H:i', strtotime($data['tanggal_masuk'])) . "</td>";
                 echo "<td>" . htmlspecialchars($data['nama_pelanggan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['layanan']) . "</td>";
-                $nilai = ($data['total_setelah_diskon'] !== null && $data['total_setelah_diskon'] > 0) ? $data['total_setelah_diskon'] : $data['total_harga_keseluruhan'];
-                echo "<td>Rp " . number_format($nilai, 0, ',', '.') . "</td>";
+                $is_promo = ($data['total_setelah_diskon'] !== null && $data['total_setelah_diskon'] > 0);
+                $nilai = $is_promo ? $data['total_setelah_diskon'] : $data['total_harga_keseluruhan'];
+                echo "<td>Rp " . number_format($nilai, 0, ',', '.');
+                if ($is_promo) {
+                    echo " <span class='badge bg-success'>Promo</span>";
+                }
+                echo "</td>";
                 echo "<td>" . htmlspecialchars($data['status_pembayaran']);
                 if ($data['status_pembayaran'] == 'DP') {
                     $sisa = $nilai - $data['nominal_pembayaran'];

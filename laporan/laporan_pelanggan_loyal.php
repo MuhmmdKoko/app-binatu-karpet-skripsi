@@ -56,49 +56,7 @@ $total_nilai_minimal = isset($_POST['total_nilai_minimal']) ? $_POST['total_nila
 
                 </div>
             </form>
-<script>
-$(document).ready(function() {
-    function pad(n) { return n < 10 ? '0' + n : n; }
-    function setTanggalPreset() {
-        var now = new Date();
-        var filter = $('#filter_periode').val();
-        var tgl_awal = '', tgl_akhir = '';
-        if (filter === 'hari') {
-            tgl_awal = tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
-        } else if (filter === 'kemarin') {
-            var yesterday = new Date(now);
-            yesterday.setDate(now.getDate()-1);
-            tgl_awal = tgl_akhir = yesterday.getFullYear() + '-' + pad(yesterday.getMonth()+1) + '-' + pad(yesterday.getDate());
-        } else if (filter === 'minggu') {
-            var firstDay = new Date(now);
-            var day = now.getDay();
-            var diff = (day === 0 ? 6 : day - 1); // Senin = 1, Minggu = 0
-            firstDay.setDate(now.getDate() - diff);
-            tgl_awal = firstDay.getFullYear() + '-' + pad(firstDay.getMonth()+1) + '-' + pad(firstDay.getDate());
-            tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
-        } else if (filter === 'bulan') {
-            tgl_awal = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-01';
-            tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate());
-        } else if (filter === 'custom') {
-            // Biarkan user mengisi manual
-            return;
-        }
-        if (tgl_awal && tgl_akhir) {
-            $('#tgl_awal').val(tgl_awal);
-            $('#tgl_akhir').val(tgl_akhir);
-        }
-    }
-    // Saat preset periode diubah
-    $('#filter_periode').on('change', function() {
-        setTanggalPreset();
-        $('#filterForm').submit();
-    });
-    // Live filter untuk input tanggal, min pesanan, total nilai
-    $('#tgl_awal, #tgl_akhir, #min_pesanan, #total_nilai_minimal').on('change', function() {
-        $('#filterForm').submit();
-    });
-});
-</script>
+
         </div>
     </div>
     <!-- Statistik Ringkas -->
@@ -284,47 +242,91 @@ while($row = mysqli_fetch_assoc($tmp_query)) {
         background-image: url('data:image/svg+xml;utf8,<svg width="10" height="10" xmlns="http://www.w3.org/2000/svg"><polygon points="0,3 5,8 10,3" style="fill:%23888;"/></svg>');
       }
     </style>
-    <!-- DataTables & Bootstrap JS -->
+        <!-- JS Libraries -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Main Script -->
     <script>
+    function pad(n) { return n < 10 ? '0' + n : n; }
+
+    function setTanggalPreset() {
+        var now = new Date();
+        var filter = $('#filter_periode').val();
+        var tgl_awal = '', tgl_akhir = '';
+        if (filter === 'hari') {
+            tgl_awal = tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+        } else if (filter === 'kemarin') {
+            var yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            tgl_awal = tgl_akhir = yesterday.getFullYear() + '-' + pad(yesterday.getMonth() + 1) + '-' + pad(yesterday.getDate());
+        } else if (filter === 'minggu') {
+            var firstDay = new Date(now);
+            var day = now.getDay();
+            var diff = (day === 0 ? 6 : day - 1); // Senin = 1, Minggu = 0
+            firstDay.setDate(now.getDate() - diff);
+            tgl_awal = firstDay.getFullYear() + '-' + pad(firstDay.getMonth() + 1) + '-' + pad(firstDay.getDate());
+            tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+        } else if (filter === 'bulan') {
+            tgl_awal = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-01';
+            tgl_akhir = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+        } else if (filter === 'custom') {
+            return; // Biarkan user mengisi manual
+        }
+        if (tgl_awal && tgl_akhir) {
+            $('#tgl_awal').val(tgl_awal);
+            $('#tgl_akhir').val(tgl_akhir);
+        }
+    }
+
     $(document).ready(function() {
-        // Destroy if already initialized
+        // --- DATA TABLE INITIALIZATION ---
         if ($.fn.DataTable.isDataTable('#laporanPelangganLoyalTable')) {
             $('#laporanPelangganLoyalTable').DataTable().destroy();
         }
-        // DataTables initialization
         $('#laporanPelangganLoyalTable').DataTable({
-            language: {
-                url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json'
-            },
+            language: { url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/id.json' },
             pageLength: 10,
             lengthMenu: [ [10, 25, 50, -1], [10, 25, 50, 'Semua'] ],
-            columnDefs: [
-                { orderable: false, targets: [8] }
-            ],
-            order: [[4, 'desc']]
+            columnDefs: [ { orderable: false, targets: [0, 8] } ], // No, Detail not orderable
+            order: [[4, 'desc']], // Order by Jumlah Pesanan desc
+            drawCallback: function() {
+                // Re-initialize tooltips on every table draw
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                    new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
         });
-        // Bootstrap tooltip initialization
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-            new bootstrap.Tooltip(tooltipTriggerEl);
+
+        // --- FILTER FORM EVENT HANDLERS ---
+        $('#filter_periode').on('change', function() {
+            setTanggalPreset();
+            $('#filterForm').submit();
         });
-        // Event delegation for detail button click to load modal content via AJAX
+        $('#tgl_awal, #tgl_akhir, #min_pesanan, #total_nilai_minimal').on('change', function() {
+            $('#filterForm').submit();
+        });
+
+        // --- MODAL DETAIL LOADER ---
         $('#laporanPelangganLoyalTable').on('click', '.btn-detail', function() {
             var id_pelanggan = $(this).data('id');
+            var tgl_awal = $('#tgl_awal').val();
+            var tgl_akhir = $('#tgl_akhir').val();
+
             $('#detailContent').html('<p class="text-center">Memuat riwayat...</p>');
             var modal = new bootstrap.Modal(document.getElementById('detailModal'));
             modal.show();
-            var terakhir_transaksi = $('input[name="terakhir_transaksi"]').val();
+
             $.ajax({
                 url: 'laporan/detail_pelanggan_loyal.php',
                 type: 'POST',
                 data: {
                     id_pelanggan: id_pelanggan,
-                    terakhir_transaksi: terakhir_transaksi
+                    tgl_awal: tgl_awal, // Kirim tanggal filter ke detail
+                    tgl_akhir: tgl_akhir
                 },
                 success: function(response) {
                     $('#detailContent').html(response);

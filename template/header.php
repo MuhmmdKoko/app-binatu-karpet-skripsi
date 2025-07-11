@@ -22,6 +22,9 @@
          style="height: 80px; max-width: 100%; object-fit: contain;">
   </div>
   <ul class="navbar-nav flex-row align-items-center justify-content-end ms-3">
+    <li class="nav-item d-flex align-items-center me-3">
+        <span class="text-dark">Anda login sebagai: <strong><?php echo htmlspecialchars($_SESSION['nama_lengkap']); ?></strong> (<?php echo htmlspecialchars($_SESSION['role']); ?>)</span>
+    </li>
     <li class="nav-item dropdown">
       <a class="nav-link nav-icon-hover" href="javascript:void(0)" id="drop2" data-bs-toggle="dropdown"
         aria-expanded="false">

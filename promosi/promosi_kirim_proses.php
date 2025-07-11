@@ -77,7 +77,7 @@ while ($pelanggan = mysqli_fetch_assoc($query_pelanggan)) {
 // Update status promosi menjadi 'terkirim' dan catat tanggal kirim
 if ($total_terkirim > 0) {
     $tanggal_kirim = date('Y-m-d H:i:s');
-    mysqli_query($konek, "UPDATE promosi SET status_promo='terkirim', tanggal_kirim='$tanggal_kirim' WHERE id_promosi=$id_promosi");
+    mysqli_query($konek, "UPDATE promosi SET status_promo='aktif', tanggal_kirim='$tanggal_kirim' WHERE id_promosi=$id_promosi");
 }
 
 echo '<script>alert("Broadcast berhasil dikirim ke ' . $total_terkirim . ' pelanggan!");window.location="?page=promosi_read";</script>';

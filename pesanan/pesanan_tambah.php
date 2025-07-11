@@ -137,6 +137,14 @@ foreach ($_POST['item'] as $item) {
     foreach ($layanan as $l) {
         if ($l['id_layanan'] == $id_layanan) {
             $satuan_layanan = strtolower(trim($l['satuan']));
+            // --- Minimal order logic (backend) ---
+            $minimal_aktif = ($l['minimal_order_aktif'] == 1 || $l['minimal_order_aktif'] === true || $l['minimal_order_aktif'] === '1');
+            $minimal_qty = floatval($l['minimal_order_kuantitas']);
+            if($minimal_aktif && $minimal_qty > 0 && $kuantitas > 0 && $kuantitas < $minimal_qty) {
+                $kuantitas = $minimal_qty;
+                $subtotal_item = $harga_saat_pesan * $kuantitas;
+                $catatan_item .= ($catatan_item ? ' ' : '') . '[Subtotal dihitung minimal order: ' . $minimal_qty . ']';
+            }
             break;
         }
     }
@@ -267,15 +275,22 @@ foreach ($_POST['item'] as $item) {
                 </div>
                 <div class="row mt-3 align-items-end">
                     <div class="col-md-4">
-                        <label for="kode_promo">Kode Promo</label>
-                        <div class="input-group mb-2">
-                            <input type="text" class="form-control" name="kode_promo" id="kode_promo" placeholder="Masukkan kode promo">
-                            <button type="button" class="btn btn-info" id="btnCekPromo">Cek Promo</button>
-                        </div>
-                        <div id="promo_info" class="small text-success"></div>
-                        <input type="hidden" name="id_promosi" id="id_promosi">
-                        <input type="hidden" name="diskon" id="diskon">
-                    </div>
+    <label for="kode_promo" class="form-label">Kode Promo</label>
+    <div class="input-group mb-2">
+        <select class="form-select" id="dropdown_promo">
+            <option value="">-- Pilih Promo Aktif --</option>
+            <option value="__manual__">Ketik Manual</option>
+        </select>
+        <input type="text" class="form-control" name="kode_promo" id="kode_promo" placeholder="Masukkan kode promo" autocomplete="off" style="display:none">
+        <button type="button" class="btn btn-info d-flex align-items-center gap-1" id="btnCekPromo">
+            <span>Cek Promo</span>
+            <span class="spinner-border spinner-border-sm d-none" id="promoSpinner" role="status" aria-hidden="true"></span>
+        </button>
+    </div>
+    <div id="promo_info" class="small"></div>
+    <input type="hidden" name="id_promosi" id="id_promosi">
+    <input type="hidden" name="diskon" id="diskon">
+</div>
                     <div class="col-md-8 text-end">
                         <hr>
                         <div id="ringkasan_diskon" style="display:none">
@@ -287,7 +302,7 @@ foreach ($_POST['item'] as $item) {
                     </div>
                 </div>
 
-                <button type="submit" name="submit_pesanan" class="btn btn-success">Simpan Pesanan</button>
+                <button type="submit" name="submit_pesanan" id="btnSimpanPesanan" class="btn btn-success" disabled>Simpan Pesanan</button>
                 <a href="?page=pesanan_read" class="btn btn-secondary">Batal</a>
             </div>
         </div>
@@ -301,35 +316,80 @@ $('#btnTambahPelanggan').on('click', function() {
     window.location.href = 'index.php?page=pelanggan_tambah';
 });
 // --- Promo: AJAX cek kode promo dan update diskon ---
+$(function(){
+    // Fetch promo list on page load
+    $.get('pesanan/promo_dropdown_fetch.php', function(list) {
+        var dropdown = $('#dropdown_promo');
+        $.each(list, function(i, p) {
+            var label = p.judul + ' ['+p.kode_promo+']';
+            if(p.status !== 'aktif') label += ' (Tidak Aktif)';
+            var opt = $('<option>').val(p.kode_promo.toLowerCase()).text(label);
+            if(p.status !== 'aktif') opt.prop('disabled',true);
+            dropdown.append(opt);
+        });
+    },'json');
+
+    // Handle dropdown selection change
+    $('#dropdown_promo').on('change', function(){
+        var val = $(this).val();
+        if(val === '__manual__') {
+            $('#kode_promo').val('').show().focus();
+            resetPromo();
+        } else if(val) {
+            $('#kode_promo').val(val).hide();
+            $('#btnCekPromo').trigger('click'); // Auto-check promo
+        } else {
+            $('#kode_promo').val('').hide();
+            resetPromo();
+        }
+    });
+
+    // If manual input is used, switch dropdown to manual
+    $('#kode_promo').on('input', function(){
+        $('#dropdown_promo').val('__manual__');
+    });
+});
+
+function resetPromo() {
+    $('#promo_info').html('');
+    $('#id_promosi').val('');
+    $('#diskon').val('');
+    $('#display_diskon').text('0');
+    $('#ringkasan_diskon').hide();
+    var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
+    $('#display_total_akhir').text(total.toLocaleString('id-ID'));
+    $('#total_setelah_diskon').val(total);
+}
+
 $('#btnCekPromo').on('click', function() {
     var kode = $('#kode_promo').val().trim();
     var total = parseFloat($('#total_harga_keseluruhan').val()) || 0;
     if (!kode) {
-        $('#promo_info').text('Kode promo wajib diisi').removeClass('text-success').addClass('text-danger');
+        // No alert needed if using dropdown, just reset
+        resetPromo();
         return;
     }
-    $('#btnCekPromo').prop('disabled', true).text('Cek...');
+
+    var $btn = $(this);
+    var $spinner = $('#promoSpinner');
+
+    $btn.prop('disabled', true);
+    $spinner.removeClass('d-none');
+
     $.post('pesanan/promo_cek.php', {kode: kode, total: total}, function(res) {
         if (res.status === 'ok') {
-            $('#promo_info').text(res.msg).removeClass('text-danger').addClass('text-success');
+            $('#promo_info').html('<span class="badge bg-success">'+res.msg+'</span>');
             $('#id_promosi').val(res.id_promosi);
             $('#diskon').val(res.diskon);
-            $('#display_diskon').text(parseInt(res.diskon).toLocaleString('id-ID'));
-            $('#ringkasan_diskon').show();
-            var totalAkhir = Math.max(0, total - res.diskon);
-            $('#display_total_akhir').text(totalAkhir.toLocaleString('id-ID'));
-            $('#total_setelah_diskon').val(totalAkhir);
         } else {
-            $('#promo_info').text(res.msg).removeClass('text-success').addClass('text-danger');
+            $('#promo_info').html('<span class="badge bg-danger">'+res.msg+'</span>');
             $('#id_promosi').val('');
             $('#diskon').val('');
-            $('#display_diskon').text('0');
-            $('#ringkasan_diskon').hide();
-            $('#display_total_akhir').text(total.toLocaleString('id-ID'));
-            $('#total_setelah_diskon').val(total);
         }
+        updatePromoTotal(); // Update display based on result
     }, 'json').always(function() {
-        $('#btnCekPromo').prop('disabled', false).text('Cek Promo');
+        $btn.prop('disabled', false);
+        $spinner.addClass('d-none');
     });
 });
 // Update total akhir jika item berubah
@@ -390,6 +450,9 @@ $('#cariPelanggan').on('keyup', function(){
             $('#id_pelanggan_form').val(id);
             $('#infoPelanggan').html('<div class="alert alert-info">Pelanggan terpilih: <strong>'+nama+'</strong></div>');
             $('#hasilCariPelanggan').html('');
+
+            // Aktifkan tombol simpan setelah pelanggan dipilih
+            $('#btnSimpanPesanan').prop('disabled', false);
         });
     });
 });
@@ -505,12 +568,26 @@ function updateItemRowTambah(tr) {
         tr.find('.qty-item-standard').prop('readonly', false);
         var qty = parseFloat(tr.find('.qty-item-standard').val()) || 0;
     }
-    var subtotal = harga * qty;
+    // --- Minimal order logic ---
+    var minimalAktif = selectedOption.data('minimal-aktif') == 1 || selectedOption.data('minimal-aktif') === true || selectedOption.data('minimal-aktif') === '1';
+    var minimalQty = parseFloat(selectedOption.data('minimal-qty')) || 0;
+    var showMinimalNote = false;
+    var usedQty = qty;
+    if(minimalAktif && minimalQty > 0 && qty > 0 && qty < minimalQty) {
+        usedQty = minimalQty;
+        showMinimalNote = true;
+    }
+    var subtotal = harga * usedQty;
     tr.find('.harga-item').val(harga > 0 ? harga.toLocaleString('id-ID') : '');
     tr.find('.subtotal-item').val(subtotal > 0 ? subtotal.toFixed(2) : '');
+    // Tampilkan info minimal order jika berlaku
+    tr.find('.minimal-order-note').remove();
+    if(showMinimalNote) {
+        tr.find('.subtotal-item').after('<div class="minimal-order-note text-warning small">Subtotal dihitung minimal order: '+minimalQty+'</div>');
+    }
     hitungTotal();
     setTanggalEstimasi();
-}
+};
 
 // Event handler untuk semua perubahan input
 $('#tabelItem').on('change input', '.select-layanan, .qty-item-standard, .panjang-item, .lebar-item', function(e) {

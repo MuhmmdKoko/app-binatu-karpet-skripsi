@@ -60,6 +60,7 @@ if (!$query) {
                 <th>Layanan</th>
                 <th>Total</th>
                 <th>Penerima</th>
+                <th>Detail</th>
             </tr>
         </thead>
         <tbody>
@@ -78,6 +79,7 @@ if (!$query) {
                 $nilai = (isset($data['total_setelah_diskon']) && $data['total_setelah_diskon'] > 0) ? $data['total_setelah_diskon'] : $data['total_harga_keseluruhan'];
                 echo "<td>Rp " . number_format($nilai, 0, ',', '.') . "</td>";
                 echo "<td>" . htmlspecialchars($data['penerima']) . "</td>";
+                echo "<td><a href='index.php?page=pesanan_detail&id=" . $data['id_pesanan'] . "' class='btn btn-info btn-sm' target='_blank' data-bs-toggle='tooltip' title='Lihat Detail Pesanan'><i class='ti ti-eye'></i></a></td>";
                 echo "</tr>";
 
                 $total_pesanan++;
@@ -87,7 +89,7 @@ if (!$query) {
             <tr>
                 <td colspan="5" align="center"><strong>Total</strong></td>
                 <td><strong>Rp <?= number_format($total_nilai, 0, ',', '.') ?></strong></td>
-                <td></td>
+                <td colspan="2"></td>
             </tr>
         </tbody>
     </table>
