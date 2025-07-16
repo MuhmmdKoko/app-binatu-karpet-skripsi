@@ -220,7 +220,7 @@ $(function(){
                         <tr>
                             <th>No</th>
                             <th>Jenis Layanan</th>
-                            <th>Total Pesanan</th>
+                            <th>Total Layanan</th>
                             <th>Rata-rata Waktu (Hari)</th>
                             <th>Estimasi Waktu (Hari)</th>
                             <th>Ketepatan Waktu (%)</th>

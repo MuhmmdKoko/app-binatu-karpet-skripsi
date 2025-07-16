@@ -41,7 +41,10 @@ $detail = mysqli_query($konek, "SELECT d.*, l.nama_layanan, l.satuan FROM detail
 </head>
 <body onload="window.print()">
 <div class="nota">
-    <h5 class="text-center">Nota Pesanan Laundry</h5>
+    <h5 class="text-center">Nota Pesanan</h5>
+    <h5 class="text-center">Berkat Laundry</h5>
+    <div class="text-center text-muted">Melayani Antar Jemput Karpet</div>
+    <div class="text-center text-muted">Nomor Telepon: 087815387416</div>
     <hr>
     <div><b>Invoice:</b> <?= htmlspecialchars($row['nomor_invoice']) ?></div>
     <div><b>Pelanggan:</b> <?= htmlspecialchars($row['nama_pelanggan']) ?> (<?= htmlspecialchars($row['nomor_telepon']) ?>)</div>

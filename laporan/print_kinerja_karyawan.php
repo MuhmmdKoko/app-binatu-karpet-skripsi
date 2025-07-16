@@ -50,8 +50,8 @@ $query_kinerja = mysqli_query($konek, "
         p.status_pesanan_umum as status_pesanan,
         pl.nama_pelanggan,
         pg.nama_lengkap as nama_karyawan,
-        GROUP_CONCAT(l.nama_layanan SEPARATOR ', ') as layanan,
-        SUM(dp.kuantitas) as total_item
+        l.nama_layanan,
+        dp.kuantitas as total_item
     FROM pesanan p
     JOIN detail_pesanan dp ON p.id_pesanan = dp.id_pesanan
     JOIN layanan l ON dp.id_layanan = l.id_layanan
@@ -59,7 +59,6 @@ $query_kinerja = mysqli_query($konek, "
     JOIN pengguna pg ON p.id_pengguna_penerima = pg.id_pengguna
     WHERE DATE(p.tanggal_masuk) BETWEEN '$start_date' AND '$end_date'
     $where_pengguna
-    GROUP BY p.id_pesanan, p.nomor_invoice, p.tanggal_masuk, p.tanggal_selesai_aktual, p.status_pesanan_umum, pl.nama_pelanggan, pg.nama_lengkap
     ORDER BY p.tanggal_masuk DESC
 ");
 
@@ -121,7 +120,7 @@ if (!$query_kinerja) {
 </head>
 <body>
     <div class="header">
-        <h2>CV. KARYA UTAMA</h2>
+        <h2>BERKAT LAUNDRY</h2>
         <h3>Laporan Kinerja Karyawan</h3>
         <p>
             <?php if ($karyawan): ?>
@@ -139,23 +138,28 @@ if (!$query_kinerja) {
     $total_pesanan = 0;
     $total_item = 0;
     $pesanan_tepat_waktu = 0;
-    $total_selesai = 0; // hanya pesanan selesai
     $temp_data = array();
 
     while($data = mysqli_fetch_array($query_kinerja)) {
-        if (!empty($data['tanggal_selesai'])) {
-            $waktu_selesai = strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk']);
-            $waktu_selesai_jam = round($waktu_selesai / (60 * 60));
-            if($waktu_selesai_jam <= 48) {
+        $is_selesai = !empty($data['tanggal_selesai']);
+        $waktu_selesai_jam = $is_selesai ? round((strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk'])) / 3600) : null;
+        $estimasi_jam = isset($data['tanggal_estimasi_selesai']) ? round((strtotime($data['tanggal_estimasi_selesai']) - strtotime($data['tanggal_masuk'])) / 3600) : 48;
+        if ($is_selesai) {
+            if ($waktu_selesai_jam <= $estimasi_jam) {
                 $pesanan_tepat_waktu++;
             }
-            $total_selesai++;
+        } else {
+            // Pesanan belum selesai, hitung durasi berjalan
+            $durasi_berjalan = round((time() - strtotime($data['tanggal_masuk'])) / 3600);
+            if ($durasi_berjalan <= $estimasi_jam) {
+                $pesanan_tepat_waktu++;
+            }
         }
         $total_pesanan++;
         $total_item += $data['total_item'];
         $temp_data[] = $data;
     }
-    $ketepatan = $total_selesai > 0 ? round(($pesanan_tepat_waktu / $total_selesai) * 100) : 0;
+    $ketepatan = $total_pesanan > 0 ? round(($pesanan_tepat_waktu / $total_pesanan) * 100) : 0;
     ?>
     <table class="summary" style="margin-bottom:18px; border:1px solid #bbb; background:#fafcff; border-radius:7px; box-shadow:0 1px 2px #eee; width:60%; margin-left:auto; margin-right:auto;">
         <tr>
@@ -171,35 +175,63 @@ if (!$query_kinerja) {
                 <th>No</th>
                 <th>No. Invoice</th>
                 <th>Tanggal Masuk</th>
-                <th>Pelanggan</th>
                 <th>Karyawan</th>
                 <th>Layanan</th>
                 <th>Jumlah Item</th>
-                <th>Status</th>
-                <th>Waktu Selesai</th>
+                <th>Tanggal Selesai</th>
                 <th>Ketepatan</th>
             </tr>
         </thead>
         <tbody>
             <?php
             $no = 1;
-            foreach($temp_data as $data) {
+            // Fungsi format hari+jam
+function format_hari_jam($total_jam) {
+    $hari = floor($total_jam / 24);
+    $jam = $total_jam % 24;
+    return $hari . ' hari ' . $jam . ' jam';
+}
+foreach($temp_data as $data) {
                 $is_selesai = !empty($data['tanggal_selesai']);
-                $waktu_selesai = $is_selesai ? strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk']) : null;
-                $waktu_selesai_jam = $is_selesai ? round($waktu_selesai / (60 * 60)) : null;
-                $tepat_waktu = $is_selesai ? ($waktu_selesai_jam <= 48 ? 'Tepat Waktu' : 'Terlambat') : 'Dalam Proses';
+$waktu_selesai = $is_selesai ? strtotime($data['tanggal_selesai']) - strtotime($data['tanggal_masuk']) : null;
+$waktu_selesai_jam = $is_selesai ? round($waktu_selesai / (60 * 60)) : null;
+// Estimasi jam: selisih jam antara tanggal masuk dan estimasi selesai (jika ada)
+$estimasi_jam = isset($data['tanggal_estimasi_selesai']) ? round((strtotime($data['tanggal_estimasi_selesai']) - strtotime($data['tanggal_masuk'])) / 3600) : 48;
+if ($is_selesai) {
+    if ($waktu_selesai_jam > $estimasi_jam) {
+        $selisih_jam = $waktu_selesai_jam - $estimasi_jam;
+        $tepat_waktu = 'Terlambat ' . format_hari_jam($selisih_jam);
+    } else {
+        $tepat_waktu = 'Tepat Waktu';
+    }
+} else {
+    // Hitung durasi berjalan dari tanggal masuk hingga sekarang
+    $durasi_berjalan = round((time() - strtotime($data['tanggal_masuk'])) / 3600);
+    if ($durasi_berjalan > $estimasi_jam) {
+        $selisih_jam = $durasi_berjalan - $estimasi_jam;
+        $tepat_waktu = 'Terlambat ' . format_hari_jam($selisih_jam);
+    } else {
+        $tepat_waktu = '-';
+    }
+}
                 $badge = $tepat_waktu === 'Tepat Waktu' ? '<span style="background:#4caf50;color:#fff;padding:2px 8px;border-radius:7px;font-size:12px;">Tepat</span>' : ($tepat_waktu === 'Terlambat' ? '<span style="background:#e53935;color:#fff;padding:2px 8px;border-radius:7px;font-size:12px;">Terlambat</span>' : '<span style="background:#2196f3;color:#fff;padding:2px 8px;border-radius:7px;font-size:12px;">Proses</span>');
                 echo "<tr>";
                 echo "<td>" . $no++ . "</td>";
                 echo "<td>" . htmlspecialchars($data['nomor_invoice']) . "</td>";
                 echo "<td>" . date('d/m/Y H:i', strtotime($data['tanggal_masuk'])) . "</td>";
-                echo "<td>" . htmlspecialchars($data['nama_pelanggan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['nama_karyawan']) . "</td>";
-                echo "<td>" . htmlspecialchars($data['layanan']) . "</td>";
+                echo "<td>" . htmlspecialchars($data['nama_layanan']) . "</td>";
                 echo "<td>" . htmlspecialchars($data['total_item']) . "</td>";
-                echo "<td>" . htmlspecialchars($data['status_pesanan']) . "</td>";
-                echo "<td>" . ($is_selesai ? date('d/m/Y H:i', strtotime($data['tanggal_selesai'])) : '-') . "</td>";
-                echo "<td>" . $badge . "</td>";
+echo "<td>" . ($is_selesai ? date('d/m/Y H:i', strtotime($data['tanggal_selesai'])) : '-') . "</td>";
+
+                // Kolom Ketepatan: tampilkan badge/keterangan sesuai status
+                    if (strpos($tepat_waktu, 'Terlambat') === 0) {
+                        echo "<td style='color:#e53935;font-weight:bold;'>$tepat_waktu</td>";
+                    } elseif ($tepat_waktu === 'Tepat Waktu') {
+                        echo "<td><span style=\"background:#4caf50;color:#1a7f37;padding:2px 8px;border-radius:7px;font-size:12px;\">Tepat</span></td>";
+                    } else {
+                        echo "<td>-</td>";
+}
                 echo "</tr>";
             }
             ?>
